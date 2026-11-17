@@ -630,14 +630,20 @@ impl crypto::ClientConfig for BoringQuicClientConfig {
         // payload is actually sent is quinn's decision (into_0rtt), and
         // servers that ignore the offer are unaffected.
         unsafe { boring_sys::SSL_set_early_data_enabled(ssl.as_ptr(), 1) };
-        ssl.set_hostname(server_name)
-            .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
-        // SNI alone does not configure certificate hostname verification.
-        let cache_name = std::ffi::CString::new(server_name)
-            .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
-        let ok = unsafe { boring_sys::SSL_set1_host(ssl.as_ptr(), cache_name.as_ptr()) };
-        if ok != 1 {
-            return Err(ConnectError::InvalidServerName(server_name.into()));
+        if let Ok(ip) = server_name.parse::<std::net::IpAddr>() {
+            ssl.param_mut()
+                .set_ip(ip)
+                .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
+        } else {
+            ssl.set_hostname(server_name)
+                .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
+            // SNI alone does not configure certificate hostname verification.
+            let cache_name = std::ffi::CString::new(server_name)
+                .map_err(|_| ConnectError::InvalidServerName(server_name.into()))?;
+            let ok = unsafe { boring_sys::SSL_set1_host(ssl.as_ptr(), cache_name.as_ptr()) };
+            if ok != 1 {
+                return Err(ConnectError::InvalidServerName(server_name.into()));
+            }
         }
         // Resume a cached ticket when we have one for this server (PSK
         // handshake; the server may additionally accept 0-RTT early data).
