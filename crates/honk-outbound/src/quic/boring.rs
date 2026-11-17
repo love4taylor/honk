@@ -538,8 +538,8 @@ pub struct BoringQuicClientConfig {
     alpn_wire: Vec<u8>,
     chrome: bool,
     ech_config_list: Option<Arc<Vec<u8>>>,
-    /// pinSHA256 is in use: resumption disabled (PSK would bypass the pin).
-    has_pin: bool,
+    /// Resumption is disabled for pins and protocols that require fresh authentication.
+    allow_resumption: bool,
     skip_cert_verify: bool,
     /// Server-identity component; verification policy is added at lookup.
     ticket_key: Option<String>,
@@ -593,10 +593,17 @@ impl BoringQuicClientConfig {
             alpn_wire,
             chrome,
             ech_config_list,
-            has_pin: pin_sha256.is_some(),
+            allow_resumption: pin_sha256.is_none(),
             skip_cert_verify,
             ticket_key,
         })
+    }
+
+    /// Disable storing and offering PSK tickets, so no 0-RTT keys can exist.
+    #[cfg(test)]
+    pub(crate) fn without_resumption(mut self) -> Self {
+        self.allow_resumption = false;
+        self
     }
 
     fn session_ticket_key(&self, server_name: &str) -> String {
@@ -642,7 +649,7 @@ impl crypto::ClientConfig for BoringQuicClientConfig {
         // subsequent dial until process restart.
         let mut offered_session = None;
         let lookup_key = self.session_ticket_key(server_name);
-        if !self.has_pin
+        if self.allow_resumption
             && let Some(&session) = SESSION_TICKETS.lock().get(&lookup_key)
         {
             unsafe {
@@ -683,7 +690,7 @@ impl crypto::ClientConfig for BoringQuicClientConfig {
         assert_eq!(ok, 1, "SSL_set_quic_transport_params");
 
         let state = Box::new(QuicCryptoState {
-            allow_resumption: !self.has_pin,
+            allow_resumption: self.allow_resumption,
             ticket_key: lookup_key,
             ..Default::default()
         });

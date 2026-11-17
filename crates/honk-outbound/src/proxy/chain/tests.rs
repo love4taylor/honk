@@ -1756,6 +1756,8 @@ fn unsupported_tunneled_nodes() -> Vec<Node> {
         link(&format!("tuic://{UUID}:pass@127.0.0.1:443")),
         link(&format!("juicity://{UUID}:pass@127.0.0.1:443")),
         link("anytls://secret@127.0.0.1:443"),
+        link("nowhere://0123456789abcdef0123456789abcdef@127.0.0.1:443?net=tcp"),
+        link("nowhere://0123456789abcdef0123456789abcdef@127.0.0.1:443?net=udp"),
     ]
 }
 

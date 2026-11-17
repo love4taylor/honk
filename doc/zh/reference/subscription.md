@@ -258,6 +258,8 @@ vless://00000000-0000-4000-8000-000000000000@example.com:443?security=tls#edge
 
 空行、注释和 Shadowrocket 的 `REMARKS=`、`STATUS=` 元信息行，honk 会忽略，也不产生节点 warning。其余每行交给 `Node::from_share_link` 解析；不支持或格式错误的行会跳过并记 warning。honk 不执行代理插件，所以带非空插件值的分享链接也跳过。正文里没有一个受支持的节点 URI 时，包括只有元信息的正文，honk 拒绝整个正文。规范的分享链接字段和协议见[节点参考](./nodes.md)。
 
+Nowhere 节点可通过纯文本或 Base64 正文中的 [`nowhere://` 链接](./nodes.md#nowherenw3)导入。Clash 和 sing-box 的结构化导入不支持 Nowhere 条目。
+
 ### Clash YAML 与 JSON
 
 完整配置或 provider 正文必须包含顶层 `proxies` 序列。缺少受支持的 `type`、服务器地址、有效非零端口或必需凭据的条目，honk 会跳过。端口可以是整数，也可以是数字字符串。JSON 用原生解码，支持显示名称里的 UTF-16 代理对转义。

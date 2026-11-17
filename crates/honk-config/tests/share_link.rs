@@ -2604,3 +2604,6 @@ fn detailed_share_link_validation_preserves_intrinsic_cause() {
             .contains("VLESS flow requires TLS or REALITY")
     );
 }
+
+#[path = "share_link/nowhere.rs"]
+mod nowhere;

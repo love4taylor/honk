@@ -248,6 +248,11 @@ impl Node {
                 .check()
                 .map_err(|(field, message)| ValidationFailure::new(Some(field), message))?;
         }
+        if let Some(config) = self.nowhere() {
+            return config
+                .validate()
+                .map_err(|(field, message)| ValidationFailure::new(Some(field), message));
+        }
         if let Some(config) = self.vless() {
             config.validate_fields()?;
         }

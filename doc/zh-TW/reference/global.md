@@ -71,7 +71,7 @@ Key 欄以破折號開頭的五列，是 dae 語法無法設定的內部欄位�
 | `dial_mode` | `dial_mode` | `"domain"` | 目的網域探索和路由模式；見 [`dial_mode`](#dial_mode)。 |
 | `allow_insecure` | `allow_insecure` | `false` | 全域 TLS 驗證備援的相容欄位；見 [`allow_insecure`](#allow_insecure)。 |
 | `sniffing_timeout` | `sniffing_timeout_ms` | `30ms` | 嗅探逾時的相容欄位；見 [`sniffing_timeout`](#sniffing_timeout)。 |
-| `tls_implementation` | `tls_implementation` | `"tls"` | 寫 `utls`（不區分大小寫）會啟用 honk 的 Chrome 風格 ClientHello 模擬，不保證精確的瀏覽器身分。其他任何值，包括空值和拼寫錯誤，都會選擇一般 BoringSSL 用戶端設定，不報錯也不產生 warning。 |
+| `tls_implementation` | `tls_implementation` | `"tls"` | 寫 `utls`（不區分大小寫）會啟用 honk 的 Chrome 風格 ClientHello 模擬，不保證精確的瀏覽器身分。其他任何值，包括空值和拼寫錯誤，都會選擇一般 BoringSSL 用戶端設定，不報錯也不產生 warning。[Nowhere](./nodes.md#nowherenw3) 的兩種載體都使用專用的 rustls 設定。 |
 | `utls_imitate` | `utls_imitate` | `"chrome_auto"` | 相容指紋請求；見 [`utls_imitate`](#utls_imitate)。 |
 | `tls_fragment` | `tls_fragment` | `false` | TLS ClientHello 分片相容開關；目前的 TLS connector 不讀取它。 |
 | `tls_fragment_length` | `tls_fragment_length` | `""` | 分片長度範圍的相容欄位；目前的 TLS connector 不讀取它。 |

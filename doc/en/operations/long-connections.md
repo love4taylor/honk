@@ -26,6 +26,8 @@ QUIC keepalive intervals are 10 s for Hysteria2/TUIC, 5 s for Juicity, and 15 s 
 
 Hysteria2/TUIC/Juicity reap locally unused connections after 120 s of inactivity. They do not reap a connection that still has active logical users. Peer-negotiated QUIC idle timeouts and remote application policies remain separate. QUIC PINGs and TUIC heartbeats are not replies to encapsulated UDP flows.
 
+[Nowhere NW3](../reference/nodes.md#nowhere-nw3) uses a 15 s QUIC keepalive. Its protocol-level UDP idle timer defaults to 120 s and renews after a successful complete send or delivered packet. The core reply-idle timer still applies. After TCP half-close or upstream EOF, Nowhere applies an additional absolute drain deadline of 30 s by default.
+
 ## What to check
 
 - Check the last application reply and the terminal outcome, not only upload counters or carrier liveness.

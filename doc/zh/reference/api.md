@@ -1459,7 +1459,7 @@ Clash listener 允许任意 CORS 来源，没有原生 API 那样的 Host 和 Or
 
 `GET /proxies` 返回 `{"proxies":{"<name>":<document>}}`；`GET /proxies/{name}` 返回单个文档。节点文档含 `name`、`type`、`udp: true` 与 `history`。组文档含 `name`、`type`、成员名列表 `all`、TCP 选择 `now` 与 `history`；Score 另含 `scoreVerification`。`GLOBAL` 含 `type: "selector"`、`all` 与 `now`，没有 `history`。
 
-节点 `type` 为 `Shadowsocks`、`Trojan`、`Vmess`、`Vless`、`Socks5`、`Hysteria2`、`Tuic`、`Juicity`、`AnyTLS`、`Chain`、`Direct` 或 `Reject`，其中 `Reject` 对应 `block`。组 `type` 为 `selector`、`url_test`、`load_balance` 或 `fallback`；Score 报告为 `url_test`。`history` 条目为 `{time,delay}`，取最近一次真实 TCP IPv4 测量。
+节点 `type` 为 `Shadowsocks`、`Trojan`、`Vmess`、`Vless`、`Socks5`、`Hysteria2`、`Tuic`、`Juicity`、`Nowhere`、`AnyTLS`、`Chain`、`Direct` 或 `Reject`，其中 `Reject` 对应 `block`。组 `type` 为 `selector`、`url_test`、`load_balance` 或 `fallback`；Score 报告为 `url_test`。`history` 条目为 `{time,delay}`，取最近一次真实 TCP IPv4 测量。
 
 `GET /rules` 返回 `{"rules":[{"type","payload","proxy"}]}`，由配置的路由规则生成，不含原生规则 ID，也没有 fallback 行。
 

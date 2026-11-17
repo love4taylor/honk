@@ -26,16 +26,16 @@ Node 模型包含下列字段。分享链接会从协议方案、userinfo、地�
 | `protocol` | enum | `ss` | 从分享链接协议方案派生；链式节点为 `chain`。 |
 | `address` | string | `""` | 从链接解析的 `host:port`；它不补充缺失的端口。 |
 | `host` | string | `""` | 显式服务端主机；否则 `Node::host()` 从 `address` 派生。 |
-| `port` | u16 | `0` | 服务端端口；URL 形链接省略端口时使用 `443`，v2rayN VMess 载荷则必须带有效端口。 |
+| `port` | u16 | `0` | 服务端端口，多数 URL 形式的链接省略时使用 `443`。Nowhere 与 v2rayN VMess 均要求显式非零端口。 |
 | `username` / `password` | string? | `null` | 协议凭据；扁平 VMess 和 VLESS 从 `password` 读取用户 UUID。 |
 | `encryption` | string? | `null` | SS/VMess 加密方式或 VLESS Encryption 客户端字符串；Shadowsocks 省略时在拨号阶段回退到 `aes-128-gcm`。见 [Encryption](#encryption)。 |
 | `packet_encoding` | `VlessUdpEncoding` | VLESS 为 `auto` | VLESS 回退编码：`auto`、`native`、`xudp` 或 `uot-v2`；规范 URI 的 `packetEncoding=none` 映射为 `native`。 |
 | `multiplex` | `VlessMultiplex` | VLESS 为 `{"protocol":"off"}` | VLESS carrier 选择：`off`、`h2` 或 `xray`；形态见 [VLESS UDP 与多路复用](#vless-udp-and-multiplexing)。 |
 | `plugin` / `plugin_opts` | string? | `null` | SIP002 插件元数据；代理插件不受支持，订阅导入会拒绝非空值。 |
 | `transport` | string | `"tcp"` | 流传输：空值或 `tcp`、`ws`、`grpc`，或输入 `splithttp` 规范化成的 `xhttp`；见[流传输](#流传输)。 |
-| `tls` | bool | `false` | 流 TLS 标志；Trojan 与 AnyTLS 链接会开启它，规范 VLESS 链接保留历史上默认开启的行为。 |
-| `sni` | string? | `null` | TLS 服务端名称；非空的 `sni` 与 `peer` 必须一致，未被传输层使用的 `host` 作为回退值。 |
-| `tls_alpn` | string[] | `[]` | AnyTLS 与 TCP 传输的 Trojan/VMess/VLESS 使用的裸 TCP TLS ALPN 名称。见 [`tls_alpn`](#tls_alpn)。 |
+| `tls` | bool | `false` | 流 TLS 标志；Trojan 与 AnyTLS 链接会开启它，规范 VLESS 链接保留历史上默认开启的行为。Nowhere 始终启用 TLS。 |
+| `sni` | string? | `null` | TLS 服务端名称；非空的 `sni` 与 `peer` 必须一致，未被传输层使用的 `host` 作为回退值。Nowhere 默认使用节点主机名或 IP 地址。 |
+| `tls_alpn` | string[] | `[]` | AnyTLS 与 TCP 传输的 Trojan/VMess/VLESS 使用的裸 TCP TLS ALPN 名称。见 [`tls_alpn`](#tls_alpn)。Nowhere 固定使用 `["nw3"]`。 |
 | `skip_cert_verify` | bool | `false` | 由 `allowInsecure`、`allow_insecure` 和 `insecure` 声明得出的证书校验旁路。见 [`skip_cert_verify`](#skip_cert_verify)。 |
 | `ech_enabled` | bool | `false` | 存在静态 ECH 配置，或 `ech=1`/`true`。 |
 | `ech_config` | string? | `null` | 来自 `ech_config` 或 `echconfig` 的 Base64 ECHConfigList。 |
@@ -55,7 +55,7 @@ Node 模型包含下列字段。分享链接会从协议方案、userinfo、地�
 | `hy2_init_stream_recv_window` / `hy2_init_conn_recv_window` | u64? | `null` | Hysteria2 QUIC 接收窗口。见 [`hy2_init_stream_recv_window` / `hy2_init_conn_recv_window`](#hy2_init_stream_recv_window--hy2_init_conn_recv_window)。 |
 | `hy2_disable_mtu_discovery` | bool? | `null` | Hysteria2 `disablePathMTUDiscovery`。 |
 | `quic_mtu` | u16? | `null` | 来自 `mtu` 的 QUIC UDP 载荷大小。见 [`quic_mtu`](#quic_mtu)。 |
-| `tls_pin_sha256` | string? | `null` | 来自 `pinSHA256` 或 `pin_sha256` 的叶证书 SHA-256 pin。见 [`tls_pin_sha256`](#tls_pin_sha256)。 |
+| `tls_pin_sha256` | string? | `null` | 来自 `pinSHA256` 或 `pin_sha256` 的叶证书 SHA-256 pin。见 [`tls_pin_sha256`](#tls_pin_sha256)。Nowhere 使用 `pin` 查询参数。 |
 | `tuic_uuid` / `tuic_password` | string? | `null` | TUIC 凭据；扁平字段须与 `username` / `password` 一致。 |
 | `tuic_congestion` / `tuic_alpn` | string? | `null` | TUIC `congestion_control` 与逗号分隔的 `alpn`；见 [TUIC 与 Juicity](#tuic-与-juicity)。 |
 | `tuic_init_stream_recv_window` / `tuic_init_conn_recv_window` | u64? | `null` | TUIC QUIC 接收窗口；有效默认值为 8 MiB / 8 MiB，conn 窗口自动增长至最多 32 MiB。 |
@@ -64,6 +64,9 @@ Node 模型包含下列字段。分享链接会从协议方案、userinfo、地�
 | `anytls_min_idle_session` | usize? | `null` | 来自 `min_idle_session` 的空闲 session 目标下限；有效默认值 `0`，受八条 session 的池上限约束。 |
 | `anytls_idle_session_check_interval` | u64? | `null` | 解析后的 `idle_session_check_interval` 秒数；当前运行时 janitor 周期仍固定为 30 秒。 |
 | `anytls_idle_session_timeout` | u64? | `null` | 来自 `idle_session_timeout` 的空闲驱逐；有效默认值 30 秒。 |
+| `nowhere_key` | string? | `null` | 来自分享链接用户信息部分的 Nowhere 密钥。Nowhere 必填，长度为 32 个小写十六进制字符。 |
+| `nowhere_net` | `NowhereCarrier` | `"tcp"` | `net=tcp` 使用 TLS/TCP，`net=udp` 使用 QUIC/UDP。两者均可承载 TCP 和 UDP 应用流量。 |
+| `nowhere_morph` | bool | `true` | 为 Nowhere 启用 Morph。分享链接使用 `morph=0` 或 `morph=1`，必须与 Portal 一致。 |
 | `hops` | string[] | 省略 | 链式节点从入口到出口的各跳节点名。其他协议携带非空列表时，honk 会移除该列表并发出警告。 |
 | `mark` | u32? | `null` | 结构化模型中的出站 `SO_MARK`；不是 dae 分享链接查询参数。 |
 | `tags` | string[] | `[]` | 分类元数据；不是 dae 分享链接查询参数。 |
@@ -80,9 +83,9 @@ URL userinfo 中，Trojan、AnyTLS、VLESS 和 VMess 取 `user:pass` 的密码�
 
 XHTTP 将省略或 `h2` 规范化为 `["h2"]`，包括 REALITY 和显式明文 H2。
 
-其他协议、关闭 TLS 的上下文、REALITY、WS/gRPC 或 QUIC override 带有非空值时，honk 拒绝该节点。TUIC 保留自己的 `tuic_alpn`。
+Nowhere 的两种载体都默认使用且只接受 `["nw3"]`。TUIC 使用自己的 `tuic_alpn`。其他路径若属于不支持的协议、关闭 TLS、REALITY、WS/gRPC 或 QUIC 覆盖配置，honk 会拒绝非空列表。
 
-只有结构化输入与导入会设置该列表；XHTTP 以外，分享链接的 `alpn` 仅为兼容而接受，不会存储。
+结构化输入和导入可以设置 `tls_alpn`。XHTTP 和 Nowhere 解析分享链接时也会设置各自必需的 ALPN。通用的分享链接 `alpn` 参数仅用于兼容。
 
 ### `skip_cert_verify`
 
@@ -158,7 +161,7 @@ node {
 
 ### `tls_pin_sha256`
 
-固定叶证书：匹配后，在任何 TLS 或 QUIC 协议上代替证书链与主机名校验。取 64 个十六进制字符，忽略冒号和空白。
+固定叶证书：匹配后，在任何 TLS 或 QUIC 协议上代替证书链与主机名校验。取 64 个十六进制字符，忽略冒号和空白。Nowhere 使用[专用 pin 格式](#nowherenw3)。
 
 链接来源为 `pinSHA256`，缺失时取 `pin_sha256`。默认 `null`。
 
@@ -274,6 +277,8 @@ protocol|host|port|credential-fingerprint|dial-shape
 - Hysteria2 混淆、REALITY 参数和 `flow`；
 - 有效的 VLESS TLS 安全配置、UDP 权限、回退编码和多路复用路径。
 
+Nowhere 将密钥纳入凭据指纹，并将载体、Morph 开关和证书 pin 纳入拨号形状。
+
 明文 VLESS 与 TLS 使用不同身份。REALITY key 选择认证传输，不受冗余 TLS 标志影响。
 
 | 结构化 `tls_alpn` | 身份派生方式 |
@@ -320,6 +325,7 @@ Auto、native、XUDP、Mux.Cool 与关闭 UDP 的节点 ID 不变。直接选择
 | `tuic` | — | 是 | 是 | QUIC 上的 TUIC v5 |
 | `juicity` | — | 是 | 是 | QUIC 上的 Juicity |
 | `anytls` | — | 是 | 是* | 多路复用 TLS session 与 UoT v2 |
+| `nowhere` | — | 是 | 是 | [NW3](#nowherenw3) 走 TLS/TCP 或 QUIC/UDP，可启用 Morph |
 | `direct` | — | 是 | 是 | 保留的内置直连出站；没有分享链接协议方案 |
 | `block` | — | 否 | 否 | 保留的内置拒绝出站；没有分享链接协议方案 |
 | `chain` | — | 是 | 需要合格的前序跳和出口 | 按顺序经过两个至四个节点拨号。见[链式节点](#链式节点)。 |
@@ -329,6 +335,7 @@ Auto、native、XUDP、Mux.Cool 与关闭 UDP 的节点 ID 不变。直接选择
 | 协议 | UDP 行为 |
 | --- | --- |
 | AnyTLS | 拒绝超过 16 KiB 的载荷，与 anytls-go 0.0.13 的中继缓冲区一致。非连接模式 UoT v2 逐数据报携带目的地和服务端的真实源地址。一条流服务一个客户端源的全部目的地；未经请求的回复也保留真实源地址。 |
+| Nowhere | 每个端点使用一条固定目标的流。TLS 使用带长度前缀的数据报，QUIC 使用 DATAGRAM 帧并支持分片和重组。两种载体均支持空数据报和最多 65,535 字节的负载，回复以该流的原目标为源地址。 |
 | Trojan | 每个客户端源使用一条 associate 流承载全部目的地，返回每个回复的真实源地址。配合服务端可获得 EIM/EIF 行为。各目的地共享队头阻塞，且流故障会影响全部目的地。 |
 
 SOCKS5 UDP ASSOCIATE 为每个客户端源保持一条控制 TCP 连接和一个中继 socket，该源的所有目的地共用它，并返回每个应答头中的真实远端对端。从未联系过的对端能否到达客户端取决于服务器：Dante 默认的 `udp.connectdst: yes` 仅在只使用过单一目的地期间才会连接其出站 socket。
@@ -339,7 +346,7 @@ SOCKS5 UDP ASSOCIATE 为每个客户端源保持一条控制 TCP 连接和一个
 - Trojan、AnyTLS；
 - VLESS XUDP/Mux.Cool、UoT v2、H2MUX。
 
-VLESS 原生 UDP 是例外，其流只指定一个目标。这包括显式 `native`，以及未启用 Vision 时 UDP/53 和 UDP/443 上的 `auto`。
+Nowhere 始终使用固定目标，且不参与上述全锥形关联。VLESS 原生 UDP 也只指定一个目标。这包括显式 `native`，以及未启用 Vision 时 UDP/53 和 UDP/443 上的 `auto`。
 
 来自此前未联系过的对端的回复，会保留该对端的源地址。这实现了 RFC 5780 全锥形的客户端部分。服务端还须为每个 association 使用一个未连接 socket，并转发任意对端的回复。honk 无法绕过服务端过滤；`direct` 流量遵循宿主机自身的 NAT。限制如下：
 
@@ -620,6 +627,53 @@ node {
 
 **升级注意：** 依赖此前 `tuic` 回退的导入节点须显式设置 `alpn: [tuic]` 才能保留旧行为。协议专用 ALPN 不改变节点 UUID，但有效配置变化会为新请求重建运行时；已有流继续遵循正常的 generation 退休机制。
 
+### Nowhere（NW3）
+
+在 `node {}` 或纯文本、base64 分享链接订阅中直接使用上游 [Share links](https://github.com/NodePassProject/Nowhere/blob/main/docs/configuration.md) 格式：
+
+```dae
+node {
+    nw_tls: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=tcp&morph=1#TLS'
+    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1#QUIC'
+}
+```
+
+| 组成 | 约定 |
+| --- | --- |
+| 密钥 | 必须是 32 个小写十六进制字符，按 ASCII 使用，不解码为十六进制字节。不可包含密码或路径。 |
+| 端点 | 必须显式指定非零端口；IPv6 主机使用方括号。 |
+| `net` | 默认 `tcp`，每个流使用独立 TLS 1.3 连接；`udp` 使用可复用 QUIC 连接。两者均可承载 TCP 和 UDP 应用流量。 |
+| `morph` | 默认 `1`，也可设为 `0`，必须与 Portal 一致。TCP 包含 Nowhere 3.3.0 使用的认证 Prelude。 |
+| `sni` | 可选的 ASCII DNS 证书名称；省略、空值或 `none` 使用端点主机。 |
+| `pin` | 可选的证书叶子 DER 的 SHA-256 指纹，必须是 64 个小写十六进制字符。它取代 CA 和主机名验证；省略、空值或 `none` 保留两项验证。 |
+| 重复参数 | 首个已识别参数生效，未知参数忽略。百分号只解码一次，`+` 保持字面值。 |
+| 片段 | 百分号解码后的节点名，显式 dae 标签优先。 |
+
+必须使用 TLS 1.3 并协商 `nw3` ALPN，不提供跳过验证或 0-RTT。`net` 选择载体，与应用流量类型独立。UDP 流固定目标，接受空包和最多 65535 字节的负载，QUIC 会对大包分片；它们不加入 honk 的共享来源、全锥形关联。应用负载在认证和 READY 完成后发送。Clash、sing-box 结构化订阅不支持 Nowhere 条目，请使用分享链接。
+
+扁平节点存储通过 `nowhere_key`、`nowhere_net` 和 `nowhere_morph` 保留这些值，TLS 字段保留 SNI 和指纹，ALPN 固定为 `["nw3"]`。这些是存储字段，不是 dae `node {}` 选项。
+
+#### Nowhere 运行环境
+
+启动前在 honk 进程环境中设置以下变量。适用变量的非法值会阻止运行时接纳节点。每个节点运行时保存一份环境快照；重启 honk 才会让复用节点采用环境变更。时长使用 `250ms`、`5s`、`2m` 等单位，必须为正值。
+
+| 变量 | 默认值 | 适配行为 |
+| --- | --- | --- |
+| `NOW_HANDSHAKE_TIMEOUT` | 密钥派生的 3–30 s，步长 100 ms | TCP 分别限制解析/拨号和合并的 Morph/TLS 握手；QUIC 分别限制 bootstrap 解析、每个地址的握手和开流。各阶段还受剩余总建流预算约束；NW3 认证使用该剩余预算。 |
+| `NOW_FLOW_SETUP_TIMEOUT` | `20s` | 单次建流总预算，包含解析、初始化等待、认证和 READY；honk 的连接超时可进一步缩短它。 |
+| `NOW_UDP_IDLE_TIMEOUT` | `120s` | 每流空闲上限，仅在完整成功发送或交付数据包后刷新；同时用于 QUIC 协商空闲上限，保活间隔为 15 s。 |
+| `NOW_QUIC_UDP_QUEUE_BYTES` | `4194304` | 连接共享的字节预算覆盖已排队的 QUIC UDP 数据和未完成重组；未完成重组还受同值的字节上限约束。Quinn 收发缓冲各固定为 4 MiB；每流队列最多 64 包，每连接共享最多 64 个未完成重组，超过 10 s 后过期。 |
+| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | 流接收、连接接收和发送窗口：`throughput` 为 16/32/32 MiB，`balanced` 为 8/16/16 MiB，`memory` 为 4/8/8 MiB。 |
+| `NOW_MORPH_TCP_PRELUDE` / `NOW_MORPH_UDP_PRELUDE` | `fade` | `fade`、`full8` 或 `low7`；只读取已启用 Morph 的相应载体设置。 |
+
+`NOW_TCP_READ_TIMEOUT` 默认为 `30s`：成功关闭写方向或读到上游 EOF 后，TCP 剩余方向受一次绝对排空期限约束。适配层观察到上游 EOF 时，honk 可能尚未完成独立客户端写方向的关闭。`NOW_SHUTDOWN_TIMEOUT` 默认为 `5s`，限制流 ID 耗尽后旧 QUIC 载体的排空时间；TLS UDP 清理使用握手超时。这些变量不改变 honk 进程退出行为。
+
+`NOW_TCP_DATA_BUF_SIZE` 只做校验，不控制 honk 转发缓冲分配。`NOW_TCP_DIAL_TIMEOUT`、`NOW_UDP_DIAL_TIMEOUT`、`NOW_RELOAD_INTERVAL` 和 `NOW_SERVICE_COOLDOWN` 只做校验，不新增对应的 Portal/Egress 行为。其他服务端监听、证书重载、Egress 池和重放缓存变量没有客户端对应行为。不再额外按无逻辑用户空闲 120 s 回收 QUIC 连接；缓存释放和运行时关闭仍由原有所有权规则控制。
+
+两种载体共用 Nowhere 私有的 rustls TLS 1.3 策略，使用 Linux 系统根证书，按客户端缓存恢复会话，并关闭 early data。显式根证书来源无效时拒绝客户端；证书 pin 绕过根证书加载，但仍验证握手签名。
+
+可通过 `SSL_CERT_FILE` 指定 CA 证书文件，通过 `SSL_CERT_DIR` 指定用冒号分隔的 CA 证书目录。显式路径取代默认的根证书搜索路径。
+
 ### AnyTLS
 
 | 链接输入 | 节点字段 / 行为 |
@@ -795,7 +849,7 @@ REALITY 不使用 CA 校验或 `skip_cert_verify`。目标 TLS 记录的缓冲�
 
 ## TLS 指纹与 ECH
 
-全局 `tls_implementation` 同时作用于代理 TCP TLS 与 QUIC：
+全局 `tls_implementation` 为代理 TCP TLS 和 QUIC 选择共享的 BoringSSL 配置。[Nowhere](#nowherenw3) 使用专用的 rustls 策略。
 
 | 取值 | 行为 |
 | --- | --- |
@@ -856,7 +910,7 @@ honk 像连接其他节点一样连接入口的服务器。之后每一跳都在
 | 入口 | 任意代理节点，按原方式拨号 |
 | 之后各跳，包括出口 | SOCKS5；Shadowsocks；不使用 XHTTP 的 Trojan 与 VMess；不使用 Vision、Encryption、XHTTP 或 TCP 多路复用（`mux=h2mux` 或 Mux.Cool）的 VLESS |
 
-对于 TCP 链，Hysteria2、TUIC、Juicity 与 AnyTLS 只能作入口。VMess 与 VLESS 各跳需要启用 `rprx` 才能拨号。入口之后，普通 TLS 拒绝需要本地 DNS 查询的 ECH 自动发现。静态 ECH 配置和有效 TLS 服务器名为 IP 字面量的情况不需要该查询，REALITY 则走自身握手路径。各跳仍须满足上表的协议条件。
+对于 TCP 链，Hysteria2、TUIC、Juicity、AnyTLS 和 Nowhere 只能作入口。VMess 与 VLESS 各跳需要启用 `rprx` 才能拨号。入口之后，普通 TLS 拒绝需要本地 DNS 查询的 ECH 自动发现。静态 ECH 配置和有效 TLS 服务器名为 IP 字面量的情况不需要该查询，REALITY 则走自身握手路径。各跳仍须满足上表的协议条件。
 
 链式节点没有自己的服务器地址、端口、凭据或分享链接。dae 声明和扁平 JSON、YAML、TOML 的 `hops` 列表都按入口到出口的顺序引用 2–4 个节点名。配置组装后，从协议 `chain` 和按顺序解析出的各实体节点 ID 派生链 ID。只改链名，或只改某一跳的名称并同步更新引用，都会保留链 ID。替换任一跳且改变该跳的实体节点 ID（例如更新地址、凭据或协议），或改变各跳 ID 的顺序、数量，都会生成新的链 ID。两条链的各跳 ID 及顺序相同时，配置会以 `duplicate-node-id` 被拒绝。
 
@@ -886,6 +940,7 @@ XHTTP 以外，未知查询 key 会被忽略，因此拼错 key 名不会报错�
 | `vmess://` | 宽松 Base64 v2rayN JSON 或编码地址形式，见流传输一节 |
 | `vless://` | URL userinfo UUID，加流传输、TLS/REALITY、flow、Encryption 与上文规范 UDP/mux 查询参数 |
 | `trojan://` | URL userinfo secret，加传输与 TLS 查询参数 |
+| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `sni`, `pin` |
 | `anytls://` | URL userinfo secret，加 TLS 与池查询参数 |
 | `hysteria2://` | 上述 Hysteria2 查询参数映射；也接受 `hysteria://` |
 | `tuic://` | 上述 TUIC userinfo 与 QUIC 调优 |

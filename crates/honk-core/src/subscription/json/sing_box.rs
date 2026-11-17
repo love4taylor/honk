@@ -76,6 +76,7 @@ pub(super) fn normalize(value: Value) -> NodeResult {
         NodeProtocol::Tuic => normalize_tuic(source, proxy),
         NodeProtocol::Juicity => normalize_juicity(source, proxy),
         NodeProtocol::AnyTLS => normalize_anytls(source, proxy),
+        NodeProtocol::Nowhere => return Err("Nowhere requires a nowhere:// share link"),
         NodeProtocol::Direct | NodeProtocol::Block | NodeProtocol::Chain => unreachable!(),
     }
     .map(NormalizedEntry::Node)

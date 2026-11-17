@@ -21,6 +21,10 @@ sha2.workspace = true
 sha3.workspace = true
 shake.workspace = true
 hmac.workspace = true
+getrandom = "0.4"
+humantime = "2"
+tokio-util = { version = "0.7", features = ["rt"] }
+subtle.workspace = true
 hkdf.workspace = true
 boring.workspace = true
 boring-sys.workspace = true
@@ -34,6 +38,7 @@ chacha20.workspace = true
 chacha20poly1305.workspace = true
 blake3.workspace = true
 bytes.workspace = true
+url.workspace = true
 base64.workspace = true
 anyhow.workspace = true
 md-5.workspace = true
@@ -52,6 +57,7 @@ h2.workspace = true
 http.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 chrono.workspace = true
 rcgen.workspace = true
 serde_json.workspace = true
@@ -59,8 +65,8 @@ tracing-subscriber.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 criterion = { version = "0.8", features = ["async_tokio", "html_reports"] }
 stats_alloc = "0.1.10"
-# rustls: test-only — loopback TLS/QUIC servers prove wire interop with the
-# BoringSSL client stack (and cross-check the QUIC crypto backend)
+# tokio-rustls is test-only; Nowhere uses Quinn's rustls re-export in production.
+# Loopback TLS/QUIC servers verify wire interop with both client backends.
 tokio-rustls.workspace = true
 
 [features]

@@ -9,6 +9,7 @@ mod chain;
 pub mod direct;
 pub mod hysteria2;
 pub mod juicity;
+pub mod nowhere;
 pub mod shadowsocks;
 pub mod socks5;
 pub(crate) mod transport;

@@ -260,6 +260,13 @@ impl ProxyRegistry {
             }
             rprx_handlers!(register, registry);
         }
+        let nowhere = Arc::new(super::nowhere::NowhereHandler);
+        registry.register(
+            ProtocolEntry::new(NodeProtocol::Nowhere, nowhere.clone())
+                .with_packet(nowhere.clone())
+                .with_warmable(nowhere.clone())
+                .with_probeable(nowhere),
+        );
         let anytls = Arc::new(AnyTlsHandler::new());
         registry.register(
             ProtocolEntry::new(NodeProtocol::AnyTLS, anytls.clone())

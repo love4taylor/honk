@@ -375,6 +375,7 @@ fn apply_protocol(mapping: &Mapping, node: &mut Node) -> Result<(), &'static str
             config.idle_session_timeout =
                 yaml_duration_alias(mapping, &["idle-session-timeout", "idle_session_timeout"])?;
         }
+        OutboundConfig::Nowhere(_) => return Err("Nowhere requires a nowhere:// share link"),
         OutboundConfig::Direct | OutboundConfig::Block | OutboundConfig::Chain(_) => {
             unreachable!()
         }

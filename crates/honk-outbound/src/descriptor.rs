@@ -177,6 +177,18 @@ static DESCRIPTORS: &[ProtocolDescriptor] = &[
         generation_runtime: GenerationRuntime::Quic,
         share_link_schemes: &["juicity"],
     },
+    ProtocolDescriptor {
+        protocol: NodeProtocol::Nowhere,
+        supports_udp: always,
+        pool_ready_streams: never,
+        pool_bare_tcp: never,
+        supports_warm: |node, _| {
+            node.nowhere()
+                .is_some_and(|config| config.carrier == honk_config::node::NowhereCarrier::Udp)
+        },
+        generation_runtime: GenerationRuntime::Quic,
+        share_link_schemes: &["nowhere"],
+    },
     // Multiplexed: the node-owned session pool already keeps reusable
     // connections. Bare-TCP or ready-stream pooling would bypass that owner,
     // creating an untracked TLS/auth session outside its lifecycle.
@@ -321,6 +333,7 @@ mod tests {
             NodeProtocol::Tuic,
             NodeProtocol::Juicity,
             NodeProtocol::AnyTLS,
+            NodeProtocol::Nowhere,
             NodeProtocol::Direct,
             NodeProtocol::Block,
             NodeProtocol::Chain,

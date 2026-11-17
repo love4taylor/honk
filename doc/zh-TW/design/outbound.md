@@ -34,6 +34,7 @@
 | 協定族 | `proxy/shadowsocks/{mod,aead2022,stream}.rs`；`proxy/vless/{mod,handler,mux,cool,encryption}.rs` |
 | QUIC | `quic/{path_health,flow_control,metrics,endpoint,client,stream,boring}.rs` |
 | AnyTLS | `proxy/anytls/{padding,writer,overflow}.rs` |
+| Nowhere NW3 | `proxy/nowhere.rs`, `proxy/nowhere/{wire,tls,quic,datagram,morph,idle,settings}.rs` |
 | Score 與健康 | `group/score/{evidence,ranking,feedback}.rs`；`alive/{health,urltest}.rs` |
 | Session pool | `session/{maintenance,speculative}.rs` |
 | Stream transport | `proxy/transport/{grpc,h2_io}.rs`；`proxy/transport/xhttp/{browser,preparation,request,response,runtime,session,stream,upload}.rs` |
@@ -115,6 +116,7 @@ native socket 包在 `PacketTransport` 後面；tunnel 協定在自己的真實 
 | Hysteria2 | 是 | 否 | 否 | `Quic` | `hysteria2`、`hysteria` |
 | TUIC | 是 | 否 | 否 | `Quic` | `tuic` |
 | Juicity | 是 | 否 | 否 | `Quic` | `juicity` |
+| Nowhere NW3 | 是 | 否 | 否 | `Quic` | `nowhere` |
 | AnyTLS | `network` 預設或包含 `udp` 時 | 否 | 否 | `AnyTls` | `anytls` |
 | Direct | 是 | 否 | 否 | `None` | 無 |
 | Block | 否 | 否 | 是 | `None` | 無 |
@@ -162,6 +164,7 @@ capability 拒絕，呼叫方可以繼續回退到設定中的冷候選。顯式
 | `anytls` | AnyTLS 邏輯 stream | UoT v2 邏輯 stream |
 | `tuic` | TUIC v5 QUIC stream | QUIC datagram 或 uni-stream fallback |
 | `juicity` | Juicity QUIC stream | 每個用戶端來源一條長度分幀 QUIC bi stream，承載所有目的地 |
+| `nowhere` | 每條流獨立使用 TLS stream，或在可重複使用的 QUIC 連線上開啟雙向 stream | 固定目的地，TLS 使用長度分幀，QUIC 使用支援分片的 DATAGRAM |
 | `chain` | 經各跳的 handler 逐跳撥號；見[鏈式節點](#鏈式節點) | 出口的 `dial_udp_over`（Trojan、VLESS 原生 UDP）；出口為 Trojan 時也可用其 `prepare_shared_source_over` |
 
 Shadowsocks 的傳統 AEAD 和 2022 版本用一個 `MultiTargetTransport` 承載同一用戶端
@@ -220,6 +223,7 @@ registry 建置 replacement。只有完整節點設定相等時，runtime 才能
 點會保留：
 
 - TUIC、Juicity 和 Hysteria2 的 QUIC client 和連線；
+- Nowhere 用戶端及其 TLS 工作階段快取和可重複使用的 QUIC 連線；
 - AnyTLS 實體 session；
 - 完整的 VLESS runtime，包括 H2/Mux.Cool carrier 和 source-ID key。
 
@@ -418,7 +422,7 @@ socket mark 和安全設定保持一致。TCP TLS 建立與 QUIC 協定初始化
 
 ## TLS、指紋、ECH 與 pin
 
-出站和 DNS transport 棧裡，正式環境的 TLS 全部使用 BoringSSL。TCP 用 `boring` 和
+出站和 DNS 的共用 TLS 路徑使用 BoringSSL。[Nowhere NW3](#nowhere-nw3) 的 TLS over TCP 和 QUIC 使用專用的 rustls 策略。TCP 用 `boring` 和
 `tokio-boring`；QUIC 用自訂的 `quinn-proto` crypto backend。信任庫由
 `webpki-root-certs` 建置。顯式 no-verify connector 只用於設定的不安全模式和
 REALITY；REALITY 用自己的握手後檢查替代 PKI。
@@ -860,6 +864,16 @@ Hysteria2 沿用 sing-quic 的 lazy TCP 建立方式：開啟雙向流後，撥�
 源埠重寫成 nominal remote 埠，讓 QUIC 只看到一個穩定的 peer。
 
 quinn 的 1.25 MiB 視窗會讓 stream 在 100 ms RTT 下大約受限於 12.5 MB/s。connection window 也限制記憶體；處理緩慢的接收方會緩衝約三倍 connection window 的資料。視窗從 8 MiB 起步，honk 的 quinn fork 透過 `TransportConfig::receive_window_autotune` 按 quic-go 的方式增長：一個 epoch 內，應用讀走超過半個視窗，且讀走這部分耗時少於 `4 × 比例 × RTT` 時，視窗翻倍。上限取 32 MiB 和設定視窗中較大的那個。增長只由應用實際讀走的位元組驅動，處理緩慢的接收方不會放大視窗，視窗也不會縮小。可以用 `tuic_init_stream_recv_window`/`tuic_init_conn_recv_window` 以及 hy2 的 `hy2_init_*` 覆蓋預設值。
+
+## Nowhere NW3
+
+`NowhereHandler` 註冊 TCP、封包、預熱和探測能力。節點執行階段持有用戶端與其 TLS 策略。`net=tcp` 為每條流撥接一個帶 mark 的 TCP socket，建立 TLS stream 後使用 TLS exporter 驗證。`net=udp` 在帶 mark 的 UDP socket 上重複使用 Quinn 連線，第一條流使用 TLS exporter 驗證連線。只有 QUIC 載體支援預熱。啟用 Morph 時，TCP Prelude 和遮罩位於 TLS 下層，UDP 遮罩位於 QUIC 下層。
+
+兩種載體都要求 TLS 1.3 和 ALPN `nw3`。rustls 策略使用 Linux 系統根憑證並驗證伺服器身分。設定葉憑證 pin 後，pin 取代憑證鏈與名稱驗證，TLS 交握簽章仍須驗證。工作階段依用戶端恢復，並停用 early data。
+
+每條流指定目的地，並在收到 READY 後傳送應用酬載。QUIC 雙向 stream 承載 TCP 酬載，或維持 UDP 流的生命週期。UDP 資料使用 QUIC DATAGRAM，依流與封包 ID 分片並進行有上限的重組。TLS 載體為每個 UDP 封包使用兩位元組長度前綴。每條流的 `PacketTransport` 固定目的地，並將回覆的來源位址對應至該目的地。重複使用 QUIC 連線時，各 UDP 流仍各自持有目的地。
+
+分享連結欄位與執行環境變數見 [Nowhere 節點參考](../reference/nodes.md#nowherenw3)。
 
 ## AnyTLS session 引擎
 

@@ -26,16 +26,16 @@ Flat structured input requires `name`, `protocol`, `address` and `port`, even wh
 | `protocol` | enum | `ss` | Derived from the share-link scheme; `chain` for a proxy chain. |
 | `address` | string | `""` | `host:port` parsed from the link; it does not supply a missing port. |
 | `host` | string | `""` | Explicit server host; otherwise `Node::host()` derives it from `address`. |
-| `port` | u16 | `0` | Server port; a URL-shaped link uses `443` when it omits the port, and a v2rayN VMess payload requires a valid port. |
+| `port` | u16 | `0` | Server port; most URL-shaped links use `443` when the port is omitted. Nowhere and v2rayN VMess require an explicit nonzero port. |
 | `username` / `password` | string? | `null` | Protocol credentials; flat VMess and VLESS read the user UUID from `password`. |
 | `encryption` | string? | `null` | SS/VMess cipher or VLESS Encryption client string; Shadowsocks falls back to `aes-128-gcm` at dial time when omitted. See [Encryption](#encryption). |
 | `packet_encoding` | `VlessUdpEncoding` | VLESS `auto` | VLESS fallback encoding: `auto`, `native`, `xudp` or `uot-v2`; the canonical URI `packetEncoding=none` maps to `native`. |
 | `multiplex` | `VlessMultiplex` | VLESS `{"protocol":"off"}` | VLESS carrier selection: `off`, `h2` or `xray`; shapes are under [VLESS UDP and multiplexing](#vless-udp-and-multiplexing). |
 | `plugin` / `plugin_opts` | string? | `null` | SIP002 plugin metadata; subscription import rejects a non-empty value because proxy plugins are unsupported. |
 | `transport` | string | `"tcp"` | Stream transport: empty or `tcp`, `ws`, `grpc`, or canonical `xhttp`, which input `splithttp` normalizes to; see [Stream transports](#stream-transports). |
-| `tls` | bool | `false` | Stream TLS flag; Trojan and AnyTLS links enable it, and canonical VLESS links keep the historical enabled default. |
-| `sni` | string? | `null` | TLS server name; non-empty `sni` and `peer` claims must agree, then an unconsumed `host` supplies the fallback. |
-| `tls_alpn` | string[] | `[]` | Raw-TCP TLS ALPN names for AnyTLS and TCP Trojan/VMess/VLESS. See [`tls_alpn`](#tls_alpn). |
+| `tls` | bool | `false` | Stream TLS flag; Trojan and AnyTLS links enable it, and canonical VLESS links keep the historical enabled default. Nowhere always enables TLS. |
+| `sni` | string? | `null` | TLS server name; non-empty `sni` and `peer` claims must agree, then an unconsumed `host` supplies the fallback. Nowhere defaults to the endpoint host. |
+| `tls_alpn` | string[] | `[]` | Raw-TCP TLS ALPN names for AnyTLS and TCP Trojan/VMess/VLESS. Nowhere uses the fixed list `["nw3"]`. See [`tls_alpn`](#tls_alpn). |
 | `skip_cert_verify` | bool | `false` | Certificate-verification bypass from the `allowInsecure`, `allow_insecure` and `insecure` claims. See [`skip_cert_verify`](#skip_cert_verify). |
 | `ech_enabled` | bool | `false` | Static ECH config present, or `ech=1`/`true`. |
 | `ech_config` | string? | `null` | Base64 ECHConfigList from `ech_config` or `echconfig`. |
@@ -55,7 +55,7 @@ Flat structured input requires `name`, `protocol`, `address` and `port`, even wh
 | `hy2_init_stream_recv_window` / `hy2_init_conn_recv_window` | u64? | `null` | Hysteria2 QUIC receive windows. See [`hy2_init_stream_recv_window` / `hy2_init_conn_recv_window`](#hy2_init_stream_recv_window--hy2_init_conn_recv_window). |
 | `hy2_disable_mtu_discovery` | bool? | `null` | Hysteria2 `disablePathMTUDiscovery`. |
 | `quic_mtu` | u16? | `null` | QUIC UDP payload size from `mtu`. See [`quic_mtu`](#quic_mtu). |
-| `tls_pin_sha256` | string? | `null` | Leaf-certificate SHA-256 pin from `pinSHA256` or `pin_sha256`. See [`tls_pin_sha256`](#tls_pin_sha256). |
+| `tls_pin_sha256` | string? | `null` | Leaf-certificate SHA-256 pin from `pinSHA256` or `pin_sha256`. See [`tls_pin_sha256`](#tls_pin_sha256). Nowhere uses the `pin` query. |
 | `tuic_uuid` / `tuic_password` | string? | `null` | TUIC credentials; flat aliases must agree with `username` / `password`. |
 | `tuic_congestion` / `tuic_alpn` | string? | `null` | TUIC `congestion_control` and comma-separated `alpn`; see [TUIC and Juicity](#tuic-and-juicity). |
 | `tuic_init_stream_recv_window` / `tuic_init_conn_recv_window` | u64? | `null` | TUIC QUIC receive windows; effective defaults are 8 MiB / 8 MiB, with the conn window auto-tuned up to 32 MiB. |
@@ -64,6 +64,9 @@ Flat structured input requires `name`, `protocol`, `address` and `port`, even wh
 | `anytls_min_idle_session` | usize? | `null` | Requested idle-session floor from `min_idle_session`; effective default `0`, bounded by the eight-session pool cap. |
 | `anytls_idle_session_check_interval` | u64? | `null` | Parsed `idle_session_check_interval` seconds; current runtime janitor cadence remains fixed at 30 s. |
 | `anytls_idle_session_timeout` | u64? | `null` | Idle eviction from `idle_session_timeout`; effective default 30 s. |
+| `nowhere_key` | string? | `null` | The Nowhere key from the share-link userinfo. Required for Nowhere and exactly 32 lowercase hexadecimal characters. |
+| `nowhere_net` | `NowhereCarrier` | `"tcp"` | `net=tcp` uses TLS over TCP and `net=udp` uses QUIC over UDP. Both carry TCP and UDP application traffic. |
+| `nowhere_morph` | bool | `true` | Enables Morph for Nowhere. The share-link query is `morph=0` or `morph=1` and the setting must match the Portal. |
 | `hops` | string[] | omitted | Chain hop node names from entry to exit. Other protocols discard the field and warn if the list is nonempty. |
 | `mark` | u32? | `null` | Structured-model outbound `SO_MARK`; not a dae share-link query. |
 | `tags` | string[] | `[]` | Classification metadata; not a dae share-link query. |
@@ -80,9 +83,9 @@ Sets the raw-TCP TLS ALPN list for AnyTLS and for Trojan, VMess and VLESS on TCP
 
 XHTTP canonicalizes omission or `h2` to `["h2"]`, including REALITY and explicit cleartext H2.
 
-honk rejects the node when another protocol, a disabled-TLS context, REALITY, WS/gRPC or a QUIC override carries a non-empty value. TUIC keeps its own `tuic_alpn`.
+Nowhere defaults to `["nw3"]` on both carriers and accepts only that list. TUIC uses its own `tuic_alpn`. On other paths, honk rejects a nonempty list for an unsupported protocol, disabled TLS, REALITY, WS/gRPC, or a QUIC override.
 
-Only structured input and imports set this list; outside XHTTP, share-link `alpn` stays compatibility-only and is not stored.
+Structured input and imports can set `tls_alpn`. XHTTP and Nowhere also set their required ALPN when parsing links. The generic share-link `alpn` query is compatibility-only.
 
 ### `skip_cert_verify`
 
@@ -158,7 +161,7 @@ node {
 
 ### `tls_pin_sha256`
 
-Pins the leaf certificate; a match replaces chain and hostname verification on any TLS or QUIC protocol. Takes 64 hex digits, with colons and whitespace ignored.
+Pins the leaf certificate; a match replaces chain and hostname verification on any TLS or QUIC protocol. Takes 64 hex digits, with colons and whitespace ignored. Nowhere uses its own [pin syntax](#nowhere-nw3).
 
 The link sources are `pinSHA256` and, when that is absent, `pin_sha256`. The default is `null`.
 
@@ -274,6 +277,8 @@ The credential fingerprint follows each handler's field precedence. The dial sha
 - Hysteria2 obfuscation, REALITY parameters, and `flow`;
 - effective VLESS TLS posture, UDP permission, fallback encoding, and multiplex paths.
 
+Nowhere hashes the key as a credential and includes the carrier, Morph setting, and certificate pin in the dial shape.
+
 Plaintext VLESS has a different identity from TLS. A REALITY key selects the authenticated transport regardless of a redundant TLS flag.
 
 | Structured `tls_alpn` | Identity derivation |
@@ -320,6 +325,7 @@ Identity is stable across rename, reload, and subscription refresh when the dial
 | `tuic` | — | Yes | Yes | TUIC v5 over QUIC |
 | `juicity` | — | Yes | Yes | Juicity over QUIC |
 | `anytls` | — | Yes | Yes* | Multiplexed TLS sessions and UoT v2 |
+| `nowhere` | — | Yes | Yes | [NW3](#nowhere-nw3) over TLS/TCP or QUIC/UDP with optional Morph |
 | `direct` | — | Yes | Yes | Reserved built-in bypass outbound; no share-link scheme |
 | `block` | — | No | No | Reserved built-in reject outbound; no share-link scheme |
 | `chain` | — | Yes | Requires an eligible prefix and exit | Dials through two to four nodes in order. See [Proxy chains](#proxy-chains). |
@@ -329,6 +335,7 @@ Identity is stable across rename, reload, and subscription refresh when the dial
 | Protocol | UDP behavior |
 | --- | --- |
 | AnyTLS | Reject payloads above 16 KiB, matching anytls-go 0.0.13's relay buffer. Non-connect UoT v2 carries each datagram's destination and the server's real source address. One stream serves all destinations of a client source; unsolicited replies retain their real source. |
+| Nowhere | One fixed-destination flow per endpoint. TLS uses length-prefixed packets and QUIC uses DATAGRAM frames with fragmentation and reassembly. Both accept zero-length payloads and payloads up to 65,535 bytes. Replies use the flow's original destination as their source. |
 | Trojan | One associate stream serves every destination of a client source and returns each reply's real source. A cooperating server can provide EIM/EIF behavior. Destinations share the stream's head-of-line blocking and fail together. |
 
 SOCKS5 UDP ASSOCIATE keeps one control TCP connection and one relay socket per client source, shared by every destination of that source. Each reply returns the real remote peer named in its header. Whether a peer the client never contacted can reach it depends on the server: Dante's default `udp.connectdst: yes` connects its outbound socket only while a single destination has been used.
@@ -339,7 +346,7 @@ SOCKS5 UDP ASSOCIATE keeps one control TCP connection and one relay socket per c
 - Trojan and AnyTLS;
 - VLESS XUDP/Mux.Cool, UoT v2, and H2MUX.
 
-VLESS native UDP is the exception: its stream names one target. This applies to explicit `native` and to `auto` on UDP/53 and UDP/443 without Vision.
+Nowhere and VLESS native UDP use fixed destinations. These flows have no shared-source or full-cone behavior. The VLESS rule applies to explicit `native` and to `auto` on UDP/53 and UDP/443 without Vision.
 
 A reply from a previously uncontacted peer is delivered with that peer's source address. This implements the client side of RFC 5780 full-cone. The server must also use one unconnected socket per association and forward replies from any peer. honk cannot override server-side filtering, and `direct` traffic follows the host's NAT. Limits:
 
@@ -634,6 +641,53 @@ Original Clash/Mihomo `proxies` entries materialize `h3` when TUIC `alpn` is mis
 
 **Upgrade:** imported TUIC nodes that relied on the previous `tuic` fallback must specify `alpn: [tuic]` to retain it. The protocol-specific ALPN does not change the node UUID, but an effective configuration change replaces its runtime for new work; existing flows retain the normal generation-retirement behavior.
 
+### Nowhere (NW3)
+
+Use the upstream [Share links](https://github.com/NodePassProject/Nowhere/blob/main/docs/configuration.md) format directly in `node {}` or a plain-text/base64 share-link subscription:
+
+```dae
+node {
+    nw_tls: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=tcp&morph=1#TLS'
+    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1#QUIC'
+}
+```
+
+| Component | Contract |
+| --- | --- |
+| Key | Exactly 32 lowercase hexadecimal characters, used as ASCII, not decoded hex bytes. No password or path. |
+| Endpoint | Explicit nonzero port; bracket IPv6 hosts. |
+| `net` | `tcp` (default): TLS 1.3 per flow; `udp`: reusable QUIC connection. Both carry TCP and UDP application traffic. |
+| `morph` | `1` (default) or `0`; must match the Portal. TCP includes the authenticated Prelude used by Nowhere 3.3.0. |
+| `sni` | Optional ASCII DNS certificate name; omitted, empty or `none` uses the endpoint host. |
+| `pin` | Optional 64 lowercase hexadecimal SHA-256 fingerprint of the leaf certificate DER. It replaces CA and hostname validation; omitted, empty or `none` keeps both checks. |
+| Repeated queries | First recognized occurrence wins. Unknown queries are ignored. Percent decoding occurs once; `+` stays literal. |
+| Fragment | Percent-decoded node name; an explicit dae tag overrides it. |
+
+TLS 1.3 and negotiated `nw3` ALPN are mandatory. There is no insecure switch or 0-RTT. The `net` query selects the carrier independently of application traffic. UDP flows have a fixed destination and accept empty packets and payloads up to 65535 bytes; QUIC fragments large packets. They do not join honk's shared-source/full-cone associations. Authentication and READY finish before application payload is accepted. Nowhere entries in Clash/sing-box structured feeds are unsupported; use share links.
+
+For flat node storage, `nowhere_key`, `nowhere_net` and `nowhere_morph` retain these values. TLS fields retain SNI and pin; ALPN is exactly `["nw3"]`. These fields are storage fields, not dae `node {}` options.
+
+#### Nowhere runtime environment
+
+Set these variables in the honk process environment before startup. Invalid applicable values reject runtime admission. Values are captured per node runtime; restart honk to apply environment changes to reused nodes. Durations use units such as `250ms`, `5s` or `2m` and must be positive.
+
+| Variable | Default | Adaptation |
+| --- | --- | --- |
+| `NOW_HANDSHAKE_TIMEOUT` | Key-derived 3–30 s in 100 ms steps | For TCP, bounds resolution/dial and the combined Morph/TLS handshake separately. For QUIC, bounds bootstrap resolution, each address handshake and stream opening separately. Every stage is also bounded by the remaining overall setup budget; NW3 authentication uses that remaining budget. |
+| `NOW_FLOW_SETUP_TIMEOUT` | `20s` | One setup budget covering resolution, initialization waits, authentication and READY; honk's connection timeout can shorten it. |
+| `NOW_UDP_IDLE_TIMEOUT` | `120s` | Per-flow idle limit, refreshed only by a complete successful send or delivered packet; also the QUIC negotiated idle limit. Keepalive is 15 s. |
+| `NOW_QUIC_UDP_QUEUE_BYTES` | `4194304` | A connection-wide byte budget covers queued QUIC UDP data and incomplete reassembly; incomplete reassembly also has the same byte ceiling. Quinn send/receive buffers are fixed at 4 MiB each. Each flow queue has at most 64 packets; each connection shares 64 partial assemblies, expired when older than 10 s. |
+| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | `throughput`: stream/connection receive and send windows 16/32/32 MiB; `balanced`: 8/16/16 MiB; `memory`: 4/8/8 MiB. |
+| `NOW_MORPH_TCP_PRELUDE` / `NOW_MORPH_UDP_PRELUDE` | `fade` | `fade`, `full8` or `low7`; only the enabled carrier's Morph setting is read. |
+
+`NOW_TCP_READ_TIMEOUT` defaults to `30s`: after a successful write shutdown or upstream read EOF, the remaining TCP direction has one absolute drain deadline. The adapter may observe upstream EOF before honk finishes closing the separate client writer. `NOW_SHUTDOWN_TIMEOUT` defaults to `5s` and bounds the old QUIC carrier drain after flow-ID exhaustion. TLS UDP cleanup uses the handshake timeout. These variables do not change honk process shutdown.
+
+`NOW_TCP_DATA_BUF_SIZE` is validated but does not configure honk relay allocation. `NOW_TCP_DIAL_TIMEOUT`, `NOW_UDP_DIAL_TIMEOUT`, `NOW_RELOAD_INTERVAL` and `NOW_SERVICE_COOLDOWN` are validated without adding the corresponding Portal/Egress behavior. Other server listener, certificate reload, Egress pool and replay-cache variables have no client role here. There is no additional 120 s zero-user QUIC reaper; cache release and runtime shutdown retain their existing ownership rules.
+
+Nowhere uses a private rustls TLS 1.3 policy for both carriers, native Linux trust roots and per-client session resumption, with early data disabled. Invalid explicit root sources reject the client; a certificate pin bypasses root loading while retaining handshake-signature verification.
+
+Set `SSL_CERT_FILE` for a CA bundle or `SSL_CERT_DIR` for a colon-separated list of CA directories. When supplied, these paths replace the default root search.
+
 ### AnyTLS
 
 | Link input | Node field / behavior |
@@ -809,7 +863,7 @@ REALITY does not use CA verification or `skip_cert_verify`. Target TLS-record bu
 
 ## TLS fingerprint and ECH
 
-Global `tls_implementation` applies to proxy TCP TLS and QUIC:
+Global `tls_implementation` selects the shared BoringSSL profile for proxy TCP TLS and QUIC. [Nowhere](#nowhere-nw3) uses its own rustls policy.
 
 | Value | Behavior |
 | --- | --- |
@@ -870,7 +924,7 @@ Each hop must name a node. A subscription refresh is rejected if it removes a re
 | Entry | Any supported physical proxy, dialed as usual |
 | Later hops, including the exit | SOCKS5, Shadowsocks, Trojan or VMess without XHTTP, and VLESS without Vision, Encryption, XHTTP, or active TCP multiplexing (H2MUX or Mux.Cool) |
 
-For TCP chains, Hysteria2, TUIC, Juicity and AnyTLS are entry-only protocols. VMess and VLESS require a build with `rprx` at any position.
+For TCP chains, Hysteria2, TUIC, Juicity, AnyTLS, and Nowhere are entry-only protocols. VMess and VLESS require a build with `rprx` at any position.
 
 honk resolves the entry server as usual. For a later hop it passes a server hostname to the preceding proxy for resolution. For an ordinary TLS hop after the entry, both configuration admission and dial time refuse ECH discovery when the effective TLS server name is a hostname. An otherwise supported hop can use a static ECH configuration. An IP-literal TLS server name needs no ECH DNS query, and REALITY uses its own handshake.
 
@@ -900,6 +954,7 @@ Outside XHTTP, unknown query keys are ignored, so a misspelled key produces no e
 | `vmess://` | Flexible-base64 v2rayN JSON or encoded authority as described under stream transports |
 | `vless://` | URL userinfo UUID plus stream transport, TLS/REALITY, flow, Encryption, and the canonical UDP/mux queries above |
 | `trojan://` | URL userinfo secret plus transport and TLS queries |
+| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `sni`, `pin` |
 | `anytls://` | URL userinfo secret plus TLS and pool queries |
 | `hysteria2://` | Hysteria2 query mapping above; `hysteria://` is also accepted |
 | `tuic://` | TUIC userinfo and QUIC tuning above |

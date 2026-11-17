@@ -10,6 +10,12 @@ A chained hop's `dial_over` runs its protocol handshake over the supplied stream
 
 The chain suppresses intermediate target milestones. Keep final request ownership across WS/VMess relay reads and either half of the gRPC driver. On a QUIC entry, `TargetRequestSent` needs successful local UDP submission for every accepted range on the request's stream; uncertainty must not replay business bytes. First-hop AnyTLS, VLESS mux, and XHTTP may report at session-writer acceptance. See [chain setup and failure attribution](../../doc/en/design/outbound.md#proxy-chains).
 
+### Nowhere NW3
+
+`proxy/nowhere.rs` owns the runtime client. `proxy/nowhere/` owns the TLS and QUIC carriers, Morph, the wire protocol, datagram framing and reassembly, and idle handling. Both carriers use a private rustls TLS 1.3 policy and negotiate `nw3`. When enabled, Morph wraps the underlying transport below TLS or QUIC. Keep application traffic gated on authentication and READY. Only the reusable QUIC carrier supports warm-up.
+
+Each UDP endpoint uses a fixed-target `PacketTransport` without a shared-source registry slot. A reused QUIC connection still keeps separate flow IDs, control streams, and datagram queues for its endpoints. Keep TLS datagram framing and partial-frame retirement local to the flow. The [Nowhere node reference](../../doc/en/reference/nodes.md#nowhere-nw3) documents carrier and environment settings.
+
 ### gRPC and XHTTP
 
 Shared gRPC lives in `proxy/transport/grpc.rs`: `h2` owns HTTP/2 and connection-wide HPACK with a 64 KiB response-header limit and its default 4 KiB dynamic table. The returned stream owns the driver/socket; split readers and writers share stable driver wakeups. At most one 16 KiB application message is queued, and flush waits for both its ownership release and physical I/O flush, including after peer window reductions. Preserve buffered payload before terminal read errors, retained read outcomes, request half-close, and graceful GOAWAY for an admitted stream; never replay application bytes.
