@@ -70,7 +70,7 @@ The five rows whose Key is `— (not settable in dae syntax)` are internal field
 | `dial_mode` | `dial_mode` | `"domain"` | Destination-domain discovery and routing mode; see [`dial_mode`](#dial_mode). |
 | `allow_insecure` | `allow_insecure` | `false` | Compatibility global TLS-verification fallback; see [`allow_insecure`](#allow_insecure). |
 | `sniffing_timeout` | `sniffing_timeout_ms` | `30ms` | Compatibility sniffing timeout; see [`sniffing_timeout`](#sniffing_timeout). |
-| `tls_implementation` | `tls_implementation` | `"tls"` | `utls`, in any letter case, enables honk's Chrome-oriented ClientHello emulation, not exact browser identity. Every other value, including empty text and misspellings, selects the regular BoringSSL client profile without an error or warning. |
+| `tls_implementation` | `tls_implementation` | `"tls"` | `utls`, in any letter case, enables honk's Chrome-oriented ClientHello emulation, not exact browser identity. Every other value, including empty text and misspellings, selects the regular BoringSSL client profile without an error or warning. [Nowhere](./nodes.md#nowhere-nw3) uses its own rustls profile on both carriers. |
 | `utls_imitate` | `utls_imitate` | `"chrome_auto"` | Compatibility fingerprint request; see [`utls_imitate`](#utls_imitate). |
 | `tls_fragment` | `tls_fragment` | `false` | Compatibility TLS ClientHello-fragmentation switch; the current TLS connector does not read it. |
 | `tls_fragment_length` | `tls_fragment_length` | `""` | Compatibility fragmentation-length range; the current TLS connector does not read it. |

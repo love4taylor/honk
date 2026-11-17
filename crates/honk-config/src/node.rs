@@ -3,6 +3,9 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 mod headers;
+mod nowhere;
+pub(crate) use nowhere::valid_domain as valid_nowhere_domain;
+pub use nowhere::{NowhereCarrier, NowhereConfig};
 mod protocol;
 mod validation;
 mod vless;
@@ -283,6 +286,13 @@ impl Node {
     pub fn anytls_mut(&mut self) -> Option<&mut AnyTlsConfig> {
         match &mut self.outbound {
             OutboundConfig::AnyTls(config) => Some(config),
+            _ => None,
+        }
+    }
+
+    pub fn nowhere(&self) -> Option<&NowhereConfig> {
+        match &self.outbound {
+            OutboundConfig::Nowhere(config) => Some(config),
             _ => None,
         }
     }

@@ -800,3 +800,27 @@ async fn c19_invalid_http_encoding_preserves_saved_body() {
     let error = error.downcast_ref::<DetailedConfigError>().unwrap();
     assert_eq!(error.diagnostic.as_ref(), &diagnostics[0]);
 }
+
+#[test]
+fn nowhere_share_link_subscriptions_preserve_carrier_and_morph() {
+    let body = "nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=0#NW3";
+    let subscription = Subscription {
+        sub_type: SubscriptionType::Simple,
+        ..Default::default()
+    };
+    for content in [
+        body.to_owned(),
+        base64::engine::general_purpose::STANDARD.encode(body),
+    ] {
+        let nodes = parse_subscription_content(&subscription, &content).unwrap();
+        assert_eq!(nodes.len(), 1);
+        let node = &nodes[0];
+        assert_eq!(node.name, "NW3");
+        assert_eq!(node.protocol(), NodeProtocol::Nowhere);
+        assert_eq!(
+            node.nowhere().unwrap().carrier,
+            honk_config::node::NowhereCarrier::Udp
+        );
+        assert!(!node.nowhere().unwrap().morph);
+    }
+}

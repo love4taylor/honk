@@ -728,3 +728,69 @@ fn cross_impl_initial_keys_match_rustls() {
 }
 
 use base64::Engine as _;
+
+#[tokio::test]
+async fn disabled_resumption_ignores_existing_tickets_and_does_not_cache_new_ones() {
+    let addr = spawn_echo_server(&[b"nw3"]);
+    let endpoint = crate::quic::client_endpoint(false).unwrap();
+    let identity = format!("fresh-auth|{addr}");
+    let crypto = || {
+        BoringQuicClientConfig::new(BoringQuicOptions {
+            alpn_wire: b"\x03nw3".to_vec(),
+            skip_cert_verify: true,
+            ticket_key: Some(identity.clone()),
+            ..Default::default()
+        })
+        .unwrap()
+    };
+    let ticket_key = crypto().session_ticket_key("localhost");
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        for attempt in 0..3 {
+            let config = if attempt == 0 {
+                crypto()
+            } else {
+                crypto().without_resumption()
+            };
+            let conn = endpoint
+                .connect_with(
+                    quinn::ClientConfig::new(Arc::new(config)),
+                    addr,
+                    "localhost",
+                )
+                .unwrap()
+                .await
+                .unwrap();
+            let data = conn
+                .handshake_data()
+                .unwrap()
+                .downcast::<BoringHandshakeData>()
+                .unwrap();
+            assert!(!data.session_reused);
+            assert!(!data.early_data_accepted);
+            let (mut send, mut recv) = conn.open_bi().await.unwrap();
+            send.write_all(b"fresh auth").await.unwrap();
+            send.finish().unwrap();
+            assert_eq!(recv.read_to_end(16).await.unwrap(), b"fresh auth");
+            if attempt == 0 {
+                loop {
+                    if SESSION_TICKETS.lock().contains_key(&ticket_key) {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            } else if attempt == 1 {
+                assert!(SESSION_TICKETS.lock().contains_key(&ticket_key));
+                let mut cache = SESSION_TICKETS.lock();
+                let session = *cache.get(&ticket_key).unwrap();
+                assert!(cache.remove_if_current(&ticket_key, session));
+            } else {
+                assert!(!SESSION_TICKETS.lock().contains_key(&ticket_key));
+            }
+            conn.close(0u32.into(), b"done");
+        }
+        endpoint.close(0u32.into(), b"done");
+        endpoint.wait_idle().await;
+    })
+    .await
+    .expect("fresh-auth ticket test timed out");
+}

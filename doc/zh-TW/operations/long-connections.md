@@ -26,6 +26,8 @@ QUIC keepalive 間隔：Hysteria2/TUIC 為 10 s，Juicity 為 5 s，DNS-over-QUI
 
 Hysteria2/TUIC/Juicity 在連線本地閒置 120 s 後回收，仍有作用中邏輯使用者的連線不會被切斷。對端協商的 QUIC 閒置逾時和遠端應用策略各自獨立。QUIC PING 和 TUIC heartbeat 都不算對封裝 UDP 流的回覆。
 
+[Nowhere NW3](../reference/nodes.md#nowherenw3) 的 QUIC keepalive 間隔為 15 s。協定層 UDP 閒置逾時預設為 120 s，完整傳送成功或收到並交付封包時重設。核心仍依回覆維護端點的閒置計時。TCP 寫入端關閉成功或上游讀到 EOF 後，Nowhere 還會套用預設 30 s 的絕對排空期限。
+
 ## 檢查項
 
 - 檢視最後一次應用回覆和最終狀態，不要只看上傳計數或 carrier 是否存活。

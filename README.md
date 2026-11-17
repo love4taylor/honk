@@ -19,7 +19,7 @@ honk follows the design of dae's eBPF datapath and configuration syntax, and of 
 ## Capabilities
 
 - Transparent TCP/UDP for LAN-forwarded and host-originated traffic through TC eBPF, `dae0`/`daens`, and compiled routing.
-- Outbounds: SOCKS5, Shadowsocks/2022, Trojan, AnyTLS, Hysteria2, TUIC, Juicity, VMess, VLESS, `direct`, and `block`. Trojan/VMess/VLESS support H2 XHTTP (`packet-up`, `stream-up`, `stream-one`); VMess is TCP-only. See [protocol limits](doc/en/reference/nodes.md).
+- Outbounds: SOCKS5, Shadowsocks/2022, Trojan, AnyTLS, Nowhere (NW3), Hysteria2, TUIC, Juicity, VMess, VLESS, `direct`, and `block`. Trojan/VMess/VLESS support H2 XHTTP (`packet-up`, `stream-up`, `stream-one`); VMess is TCP-only. See [protocol limits](doc/en/reference/nodes.md).
 - Groups: Selector (the default), URLTest, LoadBalance, Fallback, and Score. Score uses business observations and bounded validation; see [group policies](doc/en/reference/groups.md#score-policy).
 - DNS: UDP, TCP, DoT, DoH, DoQ, and DoH3 upstreams, optionally through a node or group, with routing and caching.
 - Configuration and control: dae syntax, subscriptions, reload, a Clash-compatible REST/WebSocket API, and the `honk-tool` CLI toolbox.
@@ -98,6 +98,8 @@ For vulnerabilities, follow [SECURITY.md](.github/SECURITY.md).
 SPDX-License-Identifier: GPL-3.0-only
 Copyright (c) 2025, glassyiris <honk@catmint.cc> and honk contributors
 ```
+
+The Nowhere Morph client implementation under `crates/honk-outbound/src/proxy/nowhere/morph/` is adapted from [NodePassProject/Nowhere 3.3.0](https://github.com/NodePassProject/Nowhere/tree/000007b2482b8acf3a609888921fd847cad56c33/src/transport/morph), Copyright (C) 2026 NodePassProject, GPL-3.0-only. This adaptation keeps the client wire format and integrates honk configuration and runtime ownership.
 
 The development-only [dae parser oracle](tools/dae-parse/README.md) links dae (AGPL-3.0-only). It is never shipped or linked into `honk-core`.
 

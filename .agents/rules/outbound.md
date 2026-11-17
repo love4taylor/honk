@@ -8,6 +8,12 @@ Outbound source ownership: `proxy/{error,packet,outbound,registry}.rs` retain th
 
 A chained hop's `dial_over` runs only its protocol handshake (with TLS, REALITY and WS or gRPC through `transport::wrap_tunnel`) over the stream it is given: the carrier's physical connection owns dial admission and `TransportAttached`/`TransportReady`, nothing resolves outside the tunnel (TLS ECH discovery for a domain name is refused), and a shape the hop cannot tunnel is refused with `TunnelUnsupported`, which `tunnel_unsupported()` classifies. A stream whose writes a relay task forwards (the WS bridge, the VMess relay) tracks them with `flow_observation::RelayedPipe`, and gRPC drives queued DATA under the request that queued it until that DATA is written and flushed (`flow_observation::DriverRequest`), so a later hop's `TargetRequestSent` waits for the physical write. A first-hop AnyTLS, VLESS mux or XHTTP carrier may report it as soon as its session writer accepts the request.
 
+### Nowhere NW3
+
+`proxy/nowhere.rs` owns the runtime client. `proxy/nowhere/` owns the TLS and QUIC carriers, Morph, the wire protocol, datagram framing and reassembly, and idle handling. Both carriers use a private rustls TLS 1.3 policy and negotiate `nw3`. When enabled, Morph wraps the underlying transport below TLS or QUIC. Keep application traffic gated on authentication and READY. Only the reusable QUIC carrier supports warm-up.
+
+Each UDP endpoint uses a fixed-target `PacketTransport` without a shared-source registry slot. A reused QUIC connection still keeps separate flow IDs, control streams, and datagram queues for its endpoints. Keep TLS datagram framing and partial-frame retirement local to the flow. The [Nowhere node reference](../../doc/en/reference/nodes.md#nowhere-nw3) documents carrier and environment settings.
+
 ### gRPC and XHTTP
 
 Shared gRPC lives in `proxy/transport/grpc.rs`: `h2` owns HTTP/2 and connection-wide HPACK with a 64 KiB response-header limit and its default 4 KiB dynamic table. The returned stream owns the driver/socket; split readers and writers share stable driver wakeups. At most one 16 KiB application message is queued, and flush waits for both its ownership release and physical I/O flush, including after peer window reductions. Preserve buffered payload before terminal read errors, retained read outcomes, request half-close, and graceful GOAWAY for an admitted stream; never replay application bytes.

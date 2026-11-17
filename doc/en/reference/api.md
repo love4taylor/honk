@@ -1552,7 +1552,7 @@ Each subscriber's level filter runs after the shared queue. Lagged clients skip 
 
 `GET /proxies` returns `{"proxies":{"<name>":<document>}}`; `GET /proxies/{name}` returns one document. A node document has `name`, `type`, `udp: true` and `history`. A group document has `name`, `type`, member names in `all`, its TCP choice in `now` and `history`; Score adds `scoreVerification`. `GLOBAL` has `type: "selector"`, `all` and `now` but no `history`.
 
-Node `type` is `Shadowsocks`, `Trojan`, `Vmess`, `Vless`, `Socks5`, `Hysteria2`, `Tuic`, `Juicity`, `AnyTLS`, `Direct` or `Reject` (for `block`). Group `type` is `selector`, `url_test`, `load_balance` or `fallback`; Score reports `url_test`. A `history` entry is `{time,delay}` from the latest real TCP IPv4 measurement.
+Node `type` is `Shadowsocks`, `Trojan`, `Vmess`, `Vless`, `Socks5`, `Hysteria2`, `Tuic`, `Juicity`, `Nowhere`, `AnyTLS`, `Direct` or `Reject` (for `block`). Group `type` is `selector`, `url_test`, `load_balance` or `fallback`; Score reports `url_test`. A `history` entry is `{time,delay}` from the latest real TCP IPv4 measurement.
 
 `GET /rules` returns `{"rules":[{"type","payload","proxy"}]}`, built from the configured routing rules, without native rule IDs or a fallback row.
 

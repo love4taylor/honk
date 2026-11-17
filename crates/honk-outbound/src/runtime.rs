@@ -347,6 +347,8 @@ pub struct NodeRuntime {
     /// Immutable node config for this generation.
     pub node: Arc<Node>,
     pub udp_capable: bool,
+    pub(crate) nowhere_settings:
+        Option<Result<Arc<crate::proxy::nowhere::settings::Settings>, Arc<str>>>,
     pub runtime: ProtocolRuntime,
     /// Transport-owned physical H2 sessions, independent of protocol UDP/mux state.
     pub(crate) xhttp: Option<Arc<crate::proxy::transport::xhttp::XhttpRuntime>>,
@@ -366,6 +368,13 @@ pub struct NodeRuntime {
 }
 
 impl NodeRuntime {
+    fn validate_nowhere_settings(&self) -> Result<(), RuntimeRegistryError> {
+        if let Some(Err(error)) = &self.nowhere_settings {
+            return Err(RuntimeRegistryError::Nowhere(Arc::clone(error)));
+        }
+        Ok(())
+    }
+
     fn build_xhttp(node: &Node) -> Option<Arc<crate::proxy::transport::xhttp::XhttpRuntime>> {
         #[cfg(not(any(feature = "rprx", test)))]
         if node.protocol() == honk_config::types::NodeProtocol::VLess {
@@ -384,6 +393,11 @@ impl NodeRuntime {
         let build = || {
             Arc::new(Self {
                 node: Arc::new(node.clone()),
+                nowhere_settings: node.nowhere().map(|config| {
+                    crate::proxy::nowhere::settings::Settings::load(config)
+                        .map(Arc::new)
+                        .map_err(|e| Arc::from(e.to_string()))
+                }),
                 udp_capable: (crate::descriptor::descriptor(node.protocol()).supports_udp)(node),
                 runtime: crate::descriptor::descriptor(node.protocol())
                     .generation_runtime
@@ -439,7 +453,9 @@ impl NodeRuntime {
     /// [`Self::try_ephemeral_guarded`] for cleanup on cancellation or drop.
     pub fn try_ephemeral(node: &Node) -> Result<Arc<Self>, RuntimeRegistryError> {
         Self::validate_for_ephemeral(node)?;
-        Ok(Self::build_ephemeral(node))
+        let runtime = Self::build_ephemeral(node);
+        runtime.validate_nowhere_settings()?;
+        Ok(runtime)
     }
 
     /// [`Self::try_ephemeral`] with an ownership guard that closes on drop.
@@ -447,7 +463,13 @@ impl NodeRuntime {
         node: &Node,
     ) -> Result<EphemeralRuntimeGuard, RuntimeRegistryError> {
         Self::validate_for_ephemeral(node)?;
-        Ok(Self::ephemeral_guarded_after_admission(node))
+        let guard = Self::ephemeral_guarded_after_admission(node);
+        guard
+            .runtime
+            .as_ref()
+            .expect("new guard owns its runtime")
+            .validate_nowhere_settings()?;
+        Ok(guard)
     }
 
     pub(crate) fn ephemeral_guarded_after_admission(node: &Node) -> EphemeralRuntimeGuard {
@@ -732,6 +754,8 @@ pub enum RuntimeRegistryError {
     Admission(#[source] honk_config::error::DetailedConfigError),
     #[error("node TLS configuration rejected")]
     Tls(#[source] Option<std::io::Error>),
+    #[error("Nowhere runtime environment rejected: {0}")]
+    Nowhere(Arc<str>),
 }
 
 /// The single owner of per-node session runtimes for one config
@@ -786,7 +810,9 @@ impl OutboundRuntimeRegistry {
         node: &Node,
     ) -> Result<EphemeralRuntimeGuard, RuntimeRegistryError> {
         NodeRuntime::validate_for_ephemeral(node)?;
-        Ok(self.ephemeral_guarded_after_admission(node))
+        let guard = self.ephemeral_guarded_after_admission(node);
+        guard.runtime().validate_nowhere_settings()?;
+        Ok(guard)
     }
 
     pub(crate) fn ephemeral_guarded_after_admission(&self, node: &Node) -> EphemeralRuntimeGuard {
@@ -952,6 +978,7 @@ impl OutboundRuntimeRegistry {
                     Arc::clone(&vless_carrier_semaphore),
                 ),
             };
+            runtime.validate_nowhere_settings()?;
             map.insert(node.id, runtime);
         }
         Ok((

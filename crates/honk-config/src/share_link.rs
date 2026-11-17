@@ -26,6 +26,7 @@ use crate::error::{ConfigError, DetailedConfigError, ErrorCategory};
 use crate::node::{Node, OutboundConfig, ShadowsocksConfig};
 use crate::options::vocab::{optional_text, vmess_cipher, xhttp_stream_transport};
 
+mod nowhere;
 mod options;
 mod xhttp;
 
@@ -145,6 +146,9 @@ impl Node {
         let first = decoded.as_deref().unwrap_or(first);
         let (first, embedded_hop_ports) = extract_hy2_hop_ports(first).map_err(legacy)?;
         let url = url::Url::parse(first.as_ref()).map_err(|_| invalid_link(source))?;
+        if url.scheme() == "nowhere" {
+            return nowhere::parse(first.as_ref(), &url, source);
+        }
         let mut node = node_from_url(&url, source)?;
         if let Some(config) = ss_config {
             node.outbound = OutboundConfig::Shadowsocks(config);
@@ -252,6 +256,7 @@ fn node_from_url(url: &url::Url, source: &SourceRef) -> Result<Node, DetailedCon
                 config.password = password()?;
             }
             OutboundConfig::AnyTls(config) => config.password = single()?,
+            OutboundConfig::Nowhere(_) => unreachable!("Nowhere has a dedicated parser"),
             OutboundConfig::Vmess(config) => {
                 config.uuid = single()?;
                 config.encryption = Some("auto".into());

@@ -37,6 +37,7 @@ Implementations are split into ordinary Rust modules:
 | Protocol families | `proxy/shadowsocks/{mod,aead2022,stream}.rs`; `proxy/vless/{mod,handler,mux,cool,encryption}.rs` |
 | QUIC | `quic/{path_health,flow_control,metrics,endpoint,client,stream,boring}.rs` |
 | AnyTLS | `proxy/anytls/{padding,writer,overflow}.rs` |
+| Nowhere NW3 | `proxy/nowhere.rs`, `proxy/nowhere/{wire,tls,quic,datagram,morph,idle,settings}.rs` |
 | Score and health | `group/score/{evidence,ranking,feedback}.rs`; `alive/{health,urltest}.rs` |
 | Session pool | `session/{maintenance,speculative}.rs` |
 | Stream transports | `proxy/transport/{grpc,h2_io}.rs`; `proxy/transport/xhttp/{browser,preparation,request,response,runtime,session,stream,upload}.rs` |
@@ -117,6 +118,7 @@ the Trojan transport, affect capability or pooling. Trojan and AnyTLS share
 | Hysteria2 | yes | no | no | `Quic` | `hysteria2`, `hysteria` |
 | TUIC | yes | no | no | `Quic` | `tuic` |
 | Juicity | yes | no | no | `Quic` | `juicity` |
+| Nowhere NW3 | yes | no | no | `Quic` | `nowhere` |
 | AnyTLS | when `network` is absent or contains `udp` | no | no | `AnyTls` | `anytls` |
 | Direct | yes | no | no | `None` | none |
 | Block | no | no | yes | `None` | none |
@@ -172,6 +174,7 @@ is not interchangeable with missing UDP support.
 | `anytls` | AnyTLS logical stream | UoT v2 logical stream |
 | `tuic` | TUIC v5 QUIC stream | QUIC datagrams or uni-stream fallback |
 | `juicity` | Juicity QUIC stream | One length-framed QUIC bi stream per client source, carrying every destination |
+| `nowhere` | Per-flow TLS stream or a bidirectional stream on a reusable QUIC connection | Fixed-destination UDP over TLS length frames or QUIC DATAGRAM with fragmentation |
 
 Shadowsocks (legacy AEAD and 2022) serves every destination of a client source
 from one `MultiTargetTransport`: one marked socket connected to the server and
@@ -235,6 +238,7 @@ Transfer occurs at the reload commit point. The old generation records moved
 runtimes during drain and shutdown. Unchanged nodes keep:
 
 - TUIC, Juicity, and Hysteria2 QUIC clients and connections;
+- the Nowhere client, its TLS session cache, and any reusable QUIC connection;
 - AnyTLS physical sessions; and
 - the complete VLESS runtime, including H2/Mux.Cool carriers and its source-ID key.
 
@@ -462,8 +466,8 @@ reported deterministically in original address order.
 
 ## TLS, fingerprinting, ECH, and pins
 
-All production TLS in the outbound and DNS transport stacks uses BoringSSL. TCP uses `boring` and
-`tokio-boring`; QUIC uses the custom `quinn-proto` crypto backend. The trust
+The shared outbound and DNS TLS paths use BoringSSL. [Nowhere NW3](#nowhere-nw3) uses its own rustls policy for both carriers. On the shared path, TCP uses
+`boring` and `tokio-boring`, and QUIC uses the custom `quinn-proto` crypto backend. The trust
 store is built from `webpki-root-certs`. Explicit no-verify connectors exist for
 configured insecure operation and for REALITY, whose own post-handshake check
 replaces PKI.
@@ -1063,6 +1067,32 @@ doubles, up to the larger of 32 MiB and the configured window. Growth is driven
 by bytes the application read, so a slow consumer does not inflate it, and the
 window never shrinks. Overrides:
 `tuic_init_stream_recv_window`/`tuic_init_conn_recv_window`, hy2 `hy2_init_*`.
+
+## Nowhere NW3
+
+`NowhereHandler` registers TCP, packet, warm-up, and probe capabilities. The
+node runtime retains the client and its TLS policy. With `net=tcp`, each flow
+dials a marked TCP socket, opens a TLS stream, and authenticates using the TLS
+exporter. With `net=udp`, the client reuses a Quinn connection over a marked
+UDP socket. The first flow authenticates the connection using the TLS exporter.
+Only the QUIC carrier supports warm-up. With Morph enabled, the TCP prelude
+and masking sit below TLS, and UDP masking sits below QUIC.
+
+Both carriers require TLS 1.3 and ALPN `nw3`. The rustls policy uses native
+Linux roots and verifies the server identity unless a leaf certificate pin is
+configured. The pin replaces chain and name checks while preserving TLS
+handshake signature verification. Resumption is scoped to the client and
+early data is disabled.
+
+Each flow declares its target and waits for READY before sending application
+payload. Over QUIC, a bidirectional stream carries TCP payloads or holds the
+UDP flow open. UDP data goes through QUIC DATAGRAM, with fragmentation and
+bounded reassembly keyed by flow and packet IDs. The TLS carrier uses a
+two-byte length prefix for each UDP packet. Each flow's `PacketTransport`
+exposes a fixed target and projects replies to that target. Sharing the QUIC
+connection leaves each UDP flow and its destination separate.
+
+See the [Nowhere node reference](../reference/nodes.md#nowhere-nw3) for share-link fields and runtime environment variables.
 
 ## AnyTLS session engine
 

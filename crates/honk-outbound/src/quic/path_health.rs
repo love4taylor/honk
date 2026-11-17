@@ -398,6 +398,11 @@ impl QuicPathHealth {
         Duration::from_millis(self.path_stall_timeout_ms.load(Ordering::Acquire).max(1))
     }
 
+    #[cfg(test)]
+    pub(crate) fn mark_stalled_for_test(&self) {
+        self.path_stalled.store(true, Ordering::Release);
+    }
+
     pub(crate) fn is_stalled(&self) -> bool {
         self.path_stalled.load(Ordering::Acquire)
     }

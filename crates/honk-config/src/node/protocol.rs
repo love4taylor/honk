@@ -254,6 +254,7 @@ pub enum OutboundConfig {
     Tuic(TuicConfig),
     Juicity(JuicityConfig),
     AnyTls(AnyTlsConfig),
+    Nowhere(super::NowhereConfig),
     Direct,
     Block,
 }
@@ -276,6 +277,7 @@ impl OutboundConfig {
             NodeProtocol::Tuic => Self::Tuic(TuicConfig::default()),
             NodeProtocol::Juicity => Self::Juicity(JuicityConfig::default()),
             NodeProtocol::AnyTLS => Self::AnyTls(AnyTlsConfig::default()),
+            NodeProtocol::Nowhere => Self::Nowhere(super::NowhereConfig::default()),
             NodeProtocol::Direct => Self::Direct,
             NodeProtocol::Block => Self::Block,
         }
@@ -292,6 +294,7 @@ impl OutboundConfig {
             Self::Tuic(_) => NodeProtocol::Tuic,
             Self::Juicity(_) => NodeProtocol::Juicity,
             Self::AnyTls(_) => NodeProtocol::AnyTLS,
+            Self::Nowhere(_) => NodeProtocol::Nowhere,
             Self::Direct => NodeProtocol::Direct,
             Self::Block => NodeProtocol::Block,
         }
@@ -306,6 +309,7 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&config.quic.tls),
             Self::Juicity(config) => Some(&config.quic.tls),
             Self::AnyTls(config) => Some(&config.tls),
+            Self::Nowhere(config) => Some(&config.tls),
             Self::Shadowsocks(_) | Self::Socks5(_) | Self::Direct | Self::Block => None,
         }
     }
@@ -319,6 +323,7 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&mut config.quic.tls),
             Self::Juicity(config) => Some(&mut config.quic.tls),
             Self::AnyTls(config) => Some(&mut config.tls),
+            Self::Nowhere(config) => Some(&mut config.tls),
             Self::Shadowsocks(_) | Self::Socks5(_) | Self::Direct | Self::Block => None,
         }
     }
@@ -392,6 +397,7 @@ impl OutboundConfig {
                 config.password.as_deref().unwrap_or(""),
             ]),
             Self::AnyTls(config) => identity_join(&[config.password.as_deref().unwrap_or("")]),
+            Self::Nowhere(config) => identity_join(&[&config.key]),
             Self::Direct | Self::Block => String::new(),
         }
     }
@@ -435,6 +441,14 @@ impl OutboundConfig {
             fingerprint.push_str("|ws-headers:");
             fingerprint
                 .push_str(&serde_json::to_string(headers).expect("WebSocket headers serialize"));
+        }
+        if let Self::Nowhere(config) = self {
+            fingerprint.push_str(&format!(
+                "|nw3:{}:{}:{}",
+                config.carrier.as_str(),
+                config.morph,
+                config.tls.pin_sha256.as_deref().unwrap_or("")
+            ));
         }
         if let Self::Vless(config) = self {
             fingerprint.push('|');

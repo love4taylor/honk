@@ -251,6 +251,8 @@ vless://00000000-0000-4000-8000-000000000000@example.com:443?security=tls#edge
 
 Blank lines, comments, and Shadowrocket `REMARKS=` / `STATUS=` metadata lines are ignored and produce no node warning. Every remaining line is parsed by `Node::from_share_link`. Unsupported or malformed lines are skipped with a warning. Share links with a non-empty proxy plugin are also skipped because honk does not execute plugins. The body is rejected when it contains no supported node URI, including metadata-only bodies. See the [node reference](./nodes.md) for canonical share-link fields and protocols.
 
+Use [`nowhere://` links](./nodes.md#nowhere-nw3) in plain-text or Base64 share-link bodies. Clash and sing-box structured imports do not support Nowhere entries.
+
 ### Clash YAML and JSON
 
 A full profile or provider payload must contain a top-level `proxies` sequence. Entries without a supported `type`, server address, valid nonzero port, or required credentials are skipped. Ports may be integers or numeric strings. JSON is decoded natively, including UTF-16 surrogate-pair escapes in display names.

@@ -1683,12 +1683,14 @@ dependencies = [
  "criterion",
  "foreign-types",
  "futures-util",
+ "getrandom 0.4.3",
  "h2",
  "hkdf",
  "hmac 0.13.0",
  "honk-config",
  "honk-ebpf-common",
  "http",
+ "humantime",
  "libc",
  "lru",
  "md-5",
@@ -1706,13 +1708,17 @@ dependencies = [
  "shake",
  "socket2",
  "stats_alloc",
+ "subtle",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-boring",
  "tokio-rustls",
  "tokio-tungstenite 0.30.0",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
  "webpki-root-certs",
 ]
@@ -1785,6 +1791,12 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
+name = "humantime"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15"
 
 [[package]]
 name = "hybrid-array"
@@ -3860,6 +3872,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "libc",
  "pin-project-lite",
  "tokio",
