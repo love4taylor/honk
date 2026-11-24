@@ -69,7 +69,7 @@ impl Client {
         let tls = tls::config(&config)?;
         let morph_keys = config
             .morph
-            .then(|| morph::MorphKeys::derive(config.key.as_bytes()));
+            .then(|| morph::MorphKeys::derive(config.key.as_bytes(), config.cipher));
         let quic = if config.carrier == NowhereCarrier::Udp {
             Some(quic::client(
                 node,

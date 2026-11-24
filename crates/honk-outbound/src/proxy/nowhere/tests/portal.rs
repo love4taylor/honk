@@ -14,6 +14,14 @@ pub(in crate::proxy::nowhere) async fn start(
     bin: &str,
     morph: bool,
 ) -> (Portal, tempfile::TempDir, u16, String) {
+    start_with_cipher(bin, morph, "").await
+}
+
+async fn start_with_cipher(
+    bin: &str,
+    morph: bool,
+    cipher_query: &str,
+) -> (Portal, tempfile::TempDir, u16, String) {
     use sha2::{Digest, Sha256};
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let directory = tempfile::tempdir().unwrap();
@@ -33,7 +41,7 @@ pub(in crate::proxy::nowhere) async fn start(
     drop((tcp, udp));
     let child = Command::new(bin)
         .arg(format!(
-            "portal://{KEY}@127.0.0.1:{port}?morph={}&tls=2&crt={}&key={}",
+            "portal://{KEY}@127.0.0.1:{port}?morph={}&tls=2&crt={}&key={}{cipher_query}",
             u8::from(morph),
             crt.display(),
             key.display()
@@ -67,17 +75,29 @@ pub(in crate::proxy::nowhere) async fn start(
 }
 
 #[tokio::test]
-#[ignore = "requires official Nowhere 3.3.0 executable in HONK_NOWHERE_BIN"]
+#[ignore = "requires Nowhere 3.3.0 or newer executable in HONK_NOWHERE_BIN"]
 async fn official_portal_tls_quic_morph_tcp_udp_matrix() {
+    portal_matrix(&[(false, ""), (true, "")]).await;
+}
+
+#[tokio::test]
+#[ignore = "requires Nowhere 3.4.0 or newer executable in HONK_NOWHERE_BIN"]
+async fn official_portal_aes_tls_quic_morph_tcp_udp_matrix() {
+    portal_matrix(&[(true, "&cipher=aes")]).await;
+}
+
+async fn portal_matrix(modes: &[(bool, &str)]) {
+    const UDP_READY_PROBE: &[u8] = b"quic route ready";
     let binary = std::env::var("HONK_NOWHERE_BIN").expect("HONK_NOWHERE_BIN is required");
-    for morph in [false, true] {
-        let (_portal, _directory, port, pin) = start(&binary, morph).await;
+    for &(morph, cipher_query) in modes {
+        let (_portal, _directory, port, pin) =
+            start_with_cipher(&binary, morph, cipher_query).await;
         for carrier in ["tcp", "udp"] {
-            let node = Node::from_share_link(&format!(
+            let link = format!(
                 "nowhere://{KEY}@127.0.0.1:{port}?net={carrier}&morph={}&sni=localhost&pin={pin}",
                 u8::from(morph)
-            ))
-            .unwrap();
+            );
+            let node = Node::from_share_link(&format!("{link}{cipher_query}")).unwrap();
             let generation = Arc::new(
                 crate::runtime::OutboundRuntimeRegistry::build(std::slice::from_ref(&node))
                     .unwrap(),
@@ -85,6 +105,13 @@ async fn official_portal_tls_quic_morph_tcp_udp_matrix() {
             let registry = crate::proxy::ProxyRegistry::default_resolver().unwrap();
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let target = listener.local_addr().unwrap();
+            if !cipher_query.is_empty() {
+                let wrong_cipher = Node::from_share_link(&link).unwrap();
+                let result = NowhereHandler
+                    .dial(&wrong_cipher, target, None, Duration::from_secs(1))
+                    .await;
+                assert!(result.is_err(), "accepted mismatched cipher net={carrier}");
+            }
             let echo = tokio::spawn(async move {
                 let (mut stream, _) = listener.accept().await.unwrap();
                 let mut payload = Vec::new();
@@ -119,11 +146,21 @@ async fn official_portal_tls_quic_morph_tcp_udp_matrix() {
             echo.await.unwrap();
             let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
             let target = socket.local_addr().unwrap();
+            let (ready, mut ready_ack) = tokio::sync::oneshot::channel();
             let echo = tokio::spawn(async move {
                 let mut buf = vec![0; 65535];
-                for _ in 0..5 {
+                let mut ready = Some(ready);
+                let mut echoed = 0;
+                while echoed < 5 {
                     let (len, peer) = socket.recv_from(&mut buf).await.unwrap();
+                    if &buf[..len] == UDP_READY_PROBE {
+                        if let Some(ready) = ready.take() {
+                            let _ = ready.send(());
+                        }
+                        continue;
+                    }
                     socket.send_to(&buf[..len], peer).await.unwrap();
+                    echoed += 1;
                 }
             });
             let transport = registry
@@ -137,6 +174,20 @@ async fn official_portal_tls_quic_morph_tcp_udp_matrix() {
                 .await
                 .unwrap_or_else(|error| panic!("UDP net={carrier} morph={morph}: {error:#}"));
             assert!(!transport.allows_full_cone_replies());
+            if carrier == "udp" {
+                // Portal can publish READY before its DATAGRAM route is active.
+                tokio::time::timeout(Duration::from_secs(4), async {
+                    let mut probe = tokio::time::interval(Duration::from_millis(25));
+                    loop {
+                        tokio::select! {
+                            ack = &mut ready_ack => break ack.unwrap(),
+                            _ = probe.tick() => transport.send_packet(UDP_READY_PROBE).await.unwrap(),
+                        }
+                    }
+                })
+                .await
+                .expect("Portal never activated the QUIC DATAGRAM route");
+            }
             for size in [0, 1, 1200, 5000, 60000] {
                 let payload = vec![0x5a; size];
                 transport.send_packet(&payload).await.unwrap();
@@ -157,7 +208,7 @@ async fn official_portal_tls_quic_morph_tcp_udp_matrix() {
             echo.await.unwrap();
             generation.shutdown().await;
             eprintln!(
-                "official Portal passed: net={carrier} morph={morph}, TCP half-close and UDP 0/1/1200/5000/60000 bytes"
+                "official Portal passed: net={carrier} morph={morph}{cipher_query}, TCP half-close and UDP 0/1/1200/5000/60000 bytes"
             );
         }
     }

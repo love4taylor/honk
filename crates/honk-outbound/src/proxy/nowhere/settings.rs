@@ -83,9 +83,9 @@ impl Settings {
         }
         let (stream_window, connection_window, send_window) =
             match env("NOW_TRANSPORT_MEMORY_PROFILE")?.as_deref() {
-                None | Some("throughput") => (16 << 20, 32 << 20, 32 << 20),
-                Some("balanced") => (8 << 20, 16 << 20, 16 << 20),
-                Some("memory") => (4 << 20, 8 << 20, 8 << 20),
+                None | Some("throughput") => (4 << 20, 32 << 20, 32 << 20),
+                Some("balanced") => (4 << 20, 16 << 20, 16 << 20),
+                Some("memory") => (4 << 20, 16 << 20, 8 << 20),
                 _ => bail!("NOW_TRANSPORT_MEMORY_PROFILE must be memory, balanced or throughput"),
             };
         let mut prelude = super::morph::PreludePolicy::Fade;

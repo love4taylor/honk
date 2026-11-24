@@ -1723,6 +1723,7 @@ fn node_schema_field(field: &str) -> Option<&'static str> {
         "nowhere_key" => "nowhere_key",
         "nowhere_net" => "nowhere_net",
         "nowhere_morph" => "nowhere_morph",
+        "nowhere_cipher" => "nowhere_cipher",
         "anytls_min_idle_session" => "anytls_min_idle_session",
         "anytls_idle_session_check_interval" => "anytls_idle_session_check_interval",
         "anytls_idle_session_timeout" => "anytls_idle_session_timeout",

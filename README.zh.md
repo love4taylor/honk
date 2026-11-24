@@ -101,7 +101,7 @@ Copyright (c) 2025, glassyiris <honk@catmint.cc> and honk contributors
 
 仅用于开发的 [dae 解析器 oracle](tools/dae-parse/README.md)链接了 dae（AGPL-3.0-only）。它不随发布物分发，也不链接进 `honk-core`。
 
-`crates/honk-outbound/src/proxy/nowhere/morph/` 中的 Nowhere Morph 客户端实现改编自 [NodePassProject/Nowhere 3.3.0](https://github.com/NodePassProject/Nowhere/tree/000007b2482b8acf3a609888921fd847cad56c33/src/transport/morph)，Copyright (C) 2026 NodePassProject，采用 GPL-3.0-only 许可证。适配保留客户端线格式，接入 honk 的配置和运行时资源管理。
+`crates/honk-outbound/src/proxy/nowhere/morph/` 中的 Nowhere Morph 客户端实现改编自 [NodePassProject/Nowhere 3.3.0](https://github.com/NodePassProject/Nowhere/tree/000007b2482b8acf3a609888921fd847cad56c33/src/transport/morph)，Copyright (C) 2026 NodePassProject，采用 GPL-3.0-only 许可证。适配保留客户端线格式，接入 honk 的配置和运行时资源管理。 AES-128-CTR 扩展参考 [Nowhere 3.4.0](https://github.com/NodePassProject/Nowhere/tree/000001c866b0c9fada350c84bdc11702473564a6/src/transport/morph)。
 
 ## TODO
 

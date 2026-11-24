@@ -181,6 +181,8 @@ struct FlatNode {
     #[serde(default = "crate::types::default_true")]
     nowhere_morph: bool,
     #[serde(default)]
+    nowhere_cipher: super::NowhereCipher,
+    #[serde(default)]
     anytls_min_idle_session: Option<usize>,
     #[serde(default)]
     anytls_idle_session_check_interval: Option<u64>,
@@ -701,12 +703,15 @@ impl FlatNode {
                 if tls.alpn.is_empty() {
                     tls.alpn = vec!["nw3".into()];
                 }
-                OutboundConfig::Nowhere(super::NowhereConfig {
+                let mut config = super::NowhereConfig {
                     key: flat.nowhere_key.take().unwrap_or_default(),
                     carrier: flat.nowhere_net,
                     morph: flat.nowhere_morph,
+                    cipher: flat.nowhere_cipher,
                     tls,
-                })
+                };
+                config.normalize_cipher();
+                OutboundConfig::Nowhere(config)
             }
             NodeProtocol::Direct => OutboundConfig::Direct,
             NodeProtocol::Block => OutboundConfig::Block,
@@ -814,6 +819,8 @@ struct WireOptions<'a> {
     nowhere_net: Option<super::NowhereCarrier>,
     #[serde(skip_serializing_if = "Option::is_none")]
     nowhere_morph: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nowhere_cipher: Option<super::NowhereCipher>,
     anytls_min_idle_session: Option<usize>,
     anytls_idle_session_check_interval: Option<u64>,
     anytls_idle_session_timeout: Option<u64>,
@@ -955,6 +962,9 @@ impl<'a> WireOptions<'a> {
                 wire.nowhere_key = Some(&config.key);
                 wire.nowhere_net = Some(config.carrier);
                 wire.nowhere_morph = Some(config.morph);
+                if config.morph && config.cipher != super::NowhereCipher::default() {
+                    wire.nowhere_cipher = Some(config.cipher);
+                }
             }
             OutboundConfig::Chain(config) => wire.hops = Some(&config.hops),
             OutboundConfig::Direct | OutboundConfig::Block => {}

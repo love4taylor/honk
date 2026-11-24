@@ -34,6 +34,7 @@ webpki-root-certs.workspace = true
 foreign-types.workspace = true
 aes-gcm.workspace = true
 aes.workspace = true
+ctr.workspace = true
 chacha20.workspace = true
 chacha20poly1305.workspace = true
 blake3.workspace = true

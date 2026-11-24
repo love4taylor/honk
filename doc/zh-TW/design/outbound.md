@@ -869,6 +869,8 @@ quinn 的 1.25 MiB 視窗會讓 stream 在 100 ms RTT 下大約受限於 12.5 MB
 
 `NowhereHandler` 註冊 TCP、封包、預熱和探測能力。節點執行階段持有用戶端與其 TLS 策略。`net=tcp` 為每條流撥接一個帶 mark 的 TCP socket，建立 TLS stream 後使用 TLS exporter 驗證。`net=udp` 在帶 mark 的 UDP socket 上重複使用 Quinn 連線，第一條流使用 TLS exporter 驗證連線。只有 QUIC 載體支援預熱。啟用 Morph 時，TCP Prelude 和遮罩位於 TLS 下層，UDP 遮罩位於 QUIC 下層。
 
+兩種載體預設使用 ChaCha20-IETF，也可透過 `cipher=aes` 選擇 AES-128-CTR。啟用 Morph 時，用戶端和 Portal 必須使用相同演算法。驗證與完整性檢查仍由 TLS 和 QUIC 提供。
+
 兩種載體都要求 TLS 1.3 和 ALPN `nw3`。rustls 策略使用 Linux 系統根憑證並驗證伺服器身分。設定葉憑證 pin 後，pin 取代憑證鏈與名稱驗證，TLS 交握簽章仍須驗證。工作階段依用戶端恢復，並停用 early data。
 
 每條流指定目的地，並在收到 READY 後傳送應用酬載。QUIC 雙向 stream 承載 TCP 酬載，或維持 UDP 流的生命週期。UDP 資料使用 QUIC DATAGRAM，依流與封包 ID 分片並進行有上限的重組。TLS 載體為每個 UDP 封包使用兩位元組長度前綴。每條流的 `PacketTransport` 固定目的地，並將回覆的來源位址對應至該目的地。重複使用 QUIC 連線時，各 UDP 流仍各自持有目的地。

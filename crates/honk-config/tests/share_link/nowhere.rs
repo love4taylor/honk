@@ -1,4 +1,4 @@
-use honk_config::node::{Node, NowhereCarrier};
+use honk_config::node::{Node, NowhereCarrier, NowhereCipher};
 
 const KEY: &str = "0123456789abcdef0123456789abcdef";
 
@@ -11,11 +11,16 @@ fn official_nowhere_links_defaults_duplicates_and_ipv6() {
     let implicit = parse("");
     let explicit = parse("?net=tcp&morph=1#Name%20one");
     assert_eq!(implicit.id, explicit.id);
+    assert_eq!(
+        implicit.id.to_string(),
+        "83a830ad-c6e0-53ce-b347-a22bc9097fe7"
+    );
     assert_eq!(explicit.name, "Name one");
     let config = implicit.nowhere().unwrap();
     assert_eq!(config.key, KEY);
     assert_eq!(config.carrier, NowhereCarrier::Tcp);
     assert!(config.morph);
+    assert_eq!(config.cipher, NowhereCipher::ChaCha);
     assert_eq!(
         parse("?net=udp&net=invalid&morph=0&morph=invalid")
             .nowhere()
@@ -75,9 +80,49 @@ fn nowhere_identity_covers_credentials_carrier_morph_sni_and_pin() {
 }
 
 #[test]
+fn nowhere_cipher_controls_identity_only_with_morph_enabled() {
+    let default = parse("");
+    let aes = parse("?%63ipher=chacha&cipher=%61es&cipher=%ZZ");
+    assert_eq!(aes.nowhere().unwrap().cipher, NowhereCipher::Aes);
+    assert_ne!(aes.id, default.id);
+    assert_eq!(aes.id, parse("?cipher=aes").id);
+    let chacha = parse("?cipher=chacha");
+    assert_eq!(chacha.id, default.id);
+    assert_eq!(chacha.outbound, default.outbound);
+    assert_eq!(parse("?%63ipher=aes").id, default.id);
+    assert!(
+        serde_json::to_value(chacha)
+            .unwrap()
+            .get("nowhere_cipher")
+            .is_none()
+    );
+
+    let off = parse("?morph=0");
+    let off_aes = parse("?cipher=aes&morph=0");
+    assert_eq!(off_aes.id, off.id);
+    assert_eq!(off_aes.outbound, off.outbound);
+    let mut flat = serde_json::to_value(&off).unwrap();
+    flat["nowhere_cipher"] = serde_json::json!("aes");
+    assert_eq!(
+        serde_json::from_value::<Node>(flat).unwrap().outbound,
+        off.outbound
+    );
+
+    for query in [
+        "cipher=",
+        "cipher=AES",
+        "cipher=invalid&cipher=aes",
+        "morph=0&cipher=invalid",
+    ] {
+        let link = format!("nowhere://{KEY}@relay.example:2000?{query}");
+        assert!(Node::from_share_link(&link).is_err(), "accepted {query}");
+    }
+}
+
+#[test]
 fn nowhere_round_trips_all_flat_storage_formats() {
     let node = parse(&format!(
-        "?net=udp&morph=0&sni=cert.example&pin={}#Test",
+        "?net=udp&morph=1&cipher=aes&sni=cert.example&pin={}#Test",
         "a".repeat(64)
     ));
     let json = serde_json::to_string(&node).unwrap();
@@ -95,6 +140,7 @@ fn nowhere_round_trips_all_flat_storage_formats() {
         ("skip_cert_verify", serde_json::json!(true)),
         ("tls_alpn", serde_json::json!(["h2"])),
         ("nowhere_key", serde_json::json!("bad")),
+        ("nowhere_cipher", serde_json::json!("bad")),
     ] {
         let mut json = serde_json::to_value(&node).unwrap();
         json[field] = value;
@@ -105,7 +151,7 @@ fn nowhere_round_trips_all_flat_storage_formats() {
 #[test]
 fn nowhere_dae_declaration_uses_share_links_and_explicit_tags() {
     let source = format!(
-        "node {{\n    edge: 'nowhere://{KEY}@relay.example:2000?net=udp&morph=0#fragment'\n}}\nrouting {{ fallback: direct }}"
+        "node {{\n    edge: 'nowhere://{KEY}@relay.example:2000?net=udp&cipher=aes#fragment'\n}}\nrouting {{ fallback: direct }}"
     );
     let mut diagnostics = Vec::new();
     let config =
@@ -117,5 +163,9 @@ fn nowhere_dae_declaration_uses_share_links_and_explicit_tags() {
     assert_eq!(
         config.nodes[0].nowhere().unwrap().carrier,
         NowhereCarrier::Udp
+    );
+    assert_eq!(
+        config.nodes[0].nowhere().unwrap().cipher,
+        NowhereCipher::Aes
     );
 }

@@ -74,7 +74,7 @@ fn environment_defaults_limits_and_carrier_specific_policy() {
     })
     .unwrap();
     assert_eq!(profile.handshake, Duration::from_millis(250));
-    assert_eq!(profile.connection_window, 8 << 20);
+    assert_eq!(profile.connection_window, 16 << 20);
     let mut disabled = config();
     disabled.morph = false;
     assert!(
@@ -522,7 +522,7 @@ fn cached_connection_credentials_benchmark() {
     use std::hint::black_box;
     let exporter = [0x31; 32];
     let cached_auth = wire::auth_key(KEY);
-    let cached_morph = morph::MorphKeys::derive(KEY.as_bytes());
+    let cached_morph = morph::MorphKeys::derive(KEY.as_bytes(), Default::default());
     for round in 0..7 {
         for cached in if round % 2 == 0 {
             [false, true]
@@ -536,7 +536,7 @@ fn cached_connection_credentials_benchmark() {
                 } else {
                     (
                         wire::auth_key(black_box(KEY)),
-                        morph::MorphKeys::derive(black_box(KEY.as_bytes())),
+                        morph::MorphKeys::derive(black_box(KEY.as_bytes()), Default::default()),
                     )
                 };
                 let tag = wire::auth(&auth_key, 1, black_box(&exporter));

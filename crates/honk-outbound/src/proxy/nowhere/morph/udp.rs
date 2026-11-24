@@ -8,12 +8,14 @@ use std::task::{Context, Poll};
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
+use honk_config::node::NowhereCipher;
 use quinn::udp::{RecvMeta, Transmit};
 use quinn::{AsyncUdpSocket, UdpPoller};
 
+use super::cipher::apply_datagram;
 use super::policy::PreludePolicy;
 use super::udp_socket::ClientUdpSocket;
-use super::{MorphKeyBytes, MorphKeys, NONCE_LEN, UDP_PRELUDE_LEN, exhausted};
+use super::{MorphKeyBytes, MorphKeys, NONCE_LEN, UDP_PRELUDE_LEN};
 
 const QUINN_DEFAULT_MTU_UPPER_BOUND: u16 = 1452;
 
@@ -59,6 +61,7 @@ pub(crate) fn wrap_morph_udp_socket(
             };
             Ok(Arc::new(MorphUdpSocket {
                 inner,
+                cipher: keys.cipher,
                 tx_key,
                 rx_key,
                 send: Mutex::new(UdpSendState::new(role, policy)?),
@@ -168,6 +171,7 @@ pub(crate) fn configure_morph_mtu(transport: &mut quinn::TransportConfig, enable
 
 pub(super) struct MorphUdpSocket {
     pub(super) inner: Arc<dyn AsyncUdpSocket>,
+    pub(super) cipher: NowhereCipher,
     pub(super) tx_key: MorphKeyBytes,
     pub(super) rx_key: MorphKeyBytes,
 
@@ -232,10 +236,7 @@ impl AsyncUdpSocket for MorphUdpSocket {
             let (nonce, payload) = send[wire_offset..wire_end].split_at_mut(NONCE_LEN);
             let nonce: &mut [u8; NONCE_LEN] = nonce.try_into().expect("fixed nonce prefix");
             nonce_generator.generate(nonce)?;
-            let mut cipher = ChaCha20::new((&self.tx_key).into(), (&*nonce).into());
-            cipher
-                .try_apply_keystream_b2b(plain, payload)
-                .map_err(|_| exhausted())?;
+            apply_datagram(self.cipher, &self.tx_key, nonce, plain, payload)?;
             wire_offset = wire_end;
         }
         debug_assert_eq!(wire_offset, wire_len);
@@ -333,11 +334,14 @@ impl AsyncUdpSocket for MorphUdpSocket {
             for wire in storage[..wire_meta.len].chunks(wire_stride) {
                 let (nonce, encrypted) = wire.split_at(NONCE_LEN);
                 let nonce: &[u8; NONCE_LEN] = nonce.try_into().expect("fixed nonce prefix");
-                let mut cipher = ChaCha20::new((&self.rx_key).into(), nonce.into());
                 let end = decoded_len + encrypted.len();
-                cipher
-                    .try_apply_keystream_b2b(encrypted, &mut target[decoded_len..end])
-                    .map_err(|_| exhausted())?;
+                apply_datagram(
+                    self.cipher,
+                    &self.rx_key,
+                    nonce,
+                    encrypted,
+                    &mut target[decoded_len..end],
+                )?;
 
                 decoded_len = end;
             }

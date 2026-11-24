@@ -67,6 +67,7 @@ Flat structured input requires `name`, `protocol`, `address` and `port`, even wh
 | `nowhere_key` | string? | `null` | The Nowhere key from the share-link userinfo. Required for Nowhere and exactly 32 lowercase hexadecimal characters. |
 | `nowhere_net` | `NowhereCarrier` | `"tcp"` | `net=tcp` uses TLS over TCP and `net=udp` uses QUIC over UDP. Both carry TCP and UDP application traffic. |
 | `nowhere_morph` | bool | `true` | Enables Morph for Nowhere. The share-link query is `morph=0` or `morph=1` and the setting must match the Portal. |
+| `nowhere_cipher` | `NowhereCipher` | `"chacha"` | Selects the Morph cipher through the `cipher` query. Honk stores `aes` when Morph is enabled. |
 | `hops` | string[] | omitted | Chain hop node names from entry to exit. Other protocols discard the field and warn if the list is nonempty. |
 | `mark` | u32? | `null` | Structured-model outbound `SO_MARK`; not a dae share-link query. |
 | `tags` | string[] | `[]` | Classification metadata; not a dae share-link query. |
@@ -325,7 +326,7 @@ Identity is stable across rename, reload, and subscription refresh when the dial
 | `tuic` | — | Yes | Yes | TUIC v5 over QUIC |
 | `juicity` | — | Yes | Yes | Juicity over QUIC |
 | `anytls` | — | Yes | Yes* | Multiplexed TLS sessions and UoT v2 |
-| `nowhere` | — | Yes | Yes | [NW3](#nowhere-nw3) over TLS/TCP or QUIC/UDP with optional Morph |
+| `nowhere` | — | Yes | Yes | [NW3](#nowhere-nw3) over TLS/TCP or QUIC/UDP with optional Morph (`chacha` or `aes`) |
 | `direct` | — | Yes | Yes | Reserved built-in bypass outbound; no share-link scheme |
 | `block` | — | No | No | Reserved built-in reject outbound; no share-link scheme |
 | `chain` | — | Yes | Requires an eligible prefix and exit | Dials through two to four nodes in order. See [Proxy chains](#proxy-chains). |
@@ -648,7 +649,7 @@ Use the upstream [Share links](https://github.com/NodePassProject/Nowhere/blob/m
 ```dae
 node {
     nw_tls: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=tcp&morph=1#TLS'
-    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1#QUIC'
+    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&cipher=aes#QUIC-AES'
 }
 ```
 
@@ -657,7 +658,8 @@ node {
 | Key | Exactly 32 lowercase hexadecimal characters, used as ASCII, not decoded hex bytes. No password or path. |
 | Endpoint | Explicit nonzero port; bracket IPv6 hosts. |
 | `net` | `tcp` (default): TLS 1.3 per flow; `udp`: reusable QUIC connection. Both carry TCP and UDP application traffic. |
-| `morph` | `1` (default) or `0`; must match the Portal. TCP includes the authenticated Prelude used by Nowhere 3.3.0. |
+| `morph` | `1` (default) or `0`; must match the Portal. TCP includes the authenticated Prelude. |
+| `cipher` | `chacha` (default, ChaCha20-IETF) or `aes` (AES-128-CTR). With Morph enabled, both peers must use the same cipher. AES requires Nowhere 3.4.0 or later on the Portal. With `morph=0`, either valid value has no effect. Use the literal query name `cipher`. |
 | `sni` | Optional ASCII DNS certificate name; omitted, empty or `none` uses the endpoint host. |
 | `pin` | Optional 64 lowercase hexadecimal SHA-256 fingerprint of the leaf certificate DER. It replaces CA and hostname validation; omitted, empty or `none` keeps both checks. |
 | Repeated queries | First recognized occurrence wins. Unknown queries are ignored. Percent decoding occurs once; `+` stays literal. |
@@ -665,7 +667,7 @@ node {
 
 TLS 1.3 and negotiated `nw3` ALPN are mandatory. There is no insecure switch or 0-RTT. The `net` query selects the carrier independently of application traffic. UDP flows have a fixed destination and accept empty packets and payloads up to 65535 bytes; QUIC fragments large packets. They do not join honk's shared-source/full-cone associations. Authentication and READY finish before application payload is accepted. Nowhere entries in Clash/sing-box structured feeds are unsupported; use share links.
 
-For flat node storage, `nowhere_key`, `nowhere_net` and `nowhere_morph` retain these values. TLS fields retain SNI and pin; ALPN is exactly `["nw3"]`. These fields are storage fields, not dae `node {}` options.
+Flat node storage keeps the key, carrier and Morph flag, and includes `nowhere_cipher: aes` for enabled AES. TLS fields retain SNI and pin. The ALPN list is exactly `["nw3"]`. These fields are for flat node storage. Use the share link in dae `node {}`.
 
 #### Nowhere runtime environment
 
@@ -677,8 +679,10 @@ Set these variables in the honk process environment before startup. Invalid appl
 | `NOW_FLOW_SETUP_TIMEOUT` | `20s` | One setup budget covering resolution, initialization waits, authentication and READY; honk's connection timeout can shorten it. |
 | `NOW_UDP_IDLE_TIMEOUT` | `120s` | Per-flow idle limit, refreshed only by a complete successful send or delivered packet; also the QUIC negotiated idle limit. Keepalive is 15 s. |
 | `NOW_QUIC_UDP_QUEUE_BYTES` | `4194304` | A connection-wide byte budget covers queued QUIC UDP data and incomplete reassembly; incomplete reassembly also has the same byte ceiling. Quinn send/receive buffers are fixed at 4 MiB each. Each flow queue has at most 64 packets; each connection shares 64 partial assemblies, expired when older than 10 s. |
-| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | `throughput`: stream/connection receive and send windows 16/32/32 MiB; `balanced`: 8/16/16 MiB; `memory`: 4/8/8 MiB. |
+| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | `throughput`: stream/connection receive and send windows 4/32/32 MiB; `balanced`: 4/16/16 MiB; `memory`: 4/16/8 MiB. |
 | `NOW_MORPH_TCP_PRELUDE` / `NOW_MORPH_UDP_PRELUDE` | `fade` | `fade`, `full8` or `low7`; only the enabled carrier's Morph setting is read. |
+
+The QUIC connection receive window starts at 64 KiB and increases to its profile value after authentication. The 4 MiB per-stream window can limit single-stream throughput on high-RTT paths.
 
 `NOW_TCP_READ_TIMEOUT` defaults to `30s`: after a successful write shutdown or upstream read EOF, the remaining TCP direction has one absolute drain deadline. The adapter may observe upstream EOF before honk finishes closing the separate client writer. `NOW_SHUTDOWN_TIMEOUT` defaults to `5s` and bounds the old QUIC carrier drain after flow-ID exhaustion. TLS UDP cleanup uses the handshake timeout. These variables do not change honk process shutdown.
 
@@ -954,7 +958,7 @@ Outside XHTTP, unknown query keys are ignored, so a misspelled key produces no e
 | `vmess://` | Flexible-base64 v2rayN JSON or encoded authority as described under stream transports |
 | `vless://` | URL userinfo UUID plus stream transport, TLS/REALITY, flow, Encryption, and the canonical UDP/mux queries above |
 | `trojan://` | URL userinfo secret plus transport and TLS queries |
-| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `sni`, `pin` |
+| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `cipher=chacha\|aes`, `sni`, `pin` |
 | `anytls://` | URL userinfo secret plus TLS and pool queries |
 | `hysteria2://` | Hysteria2 query mapping above; `hysteria://` is also accepted |
 | `tuic://` | TUIC userinfo and QUIC tuning above |

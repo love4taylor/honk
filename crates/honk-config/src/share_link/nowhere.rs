@@ -1,6 +1,6 @@
 use crate::diagnostic::SourceRef;
 use crate::error::DetailedConfigError;
-use crate::node::{Node, NowhereCarrier, NowhereConfig, OutboundConfig};
+use crate::node::{Node, NowhereCarrier, NowhereCipher, NowhereConfig, OutboundConfig};
 
 fn decode(value: &str, source: &SourceRef) -> Result<String, DetailedConfigError> {
     let bytes = value.as_bytes();
@@ -60,11 +60,17 @@ pub(super) fn parse(
     };
     let mut seen = std::collections::HashSet::new();
     for pair in url.query().unwrap_or("").split('&') {
-        let (name, value) = pair.split_once('=').unwrap_or((pair, ""));
-        let Ok(name) = decode(name, source) else {
+        let (raw_name, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let Ok(name) = decode(raw_name, source) else {
             continue;
         };
-        if !matches!(name.as_str(), "net" | "morph" | "sni" | "pin") || !seen.insert(name.clone()) {
+        // Nowhere 3.4 matches the new cipher key literally. Keep older aliases.
+        if name == "cipher" && raw_name != "cipher" {
+            continue;
+        }
+        if !matches!(name.as_str(), "net" | "morph" | "cipher" | "sni" | "pin")
+            || !seen.insert(name.clone())
+        {
             continue;
         }
         let value = decode(value, source)?;
@@ -83,11 +89,19 @@ pub(super) fn parse(
                     _ => return Err(invalid()),
                 }
             }
+            "cipher" => {
+                config.cipher = match value.as_str() {
+                    "chacha" => NowhereCipher::ChaCha,
+                    "aes" => NowhereCipher::Aes,
+                    _ => return Err(invalid()),
+                };
+            }
             "sni" if !value.is_empty() && value != "none" => config.tls.sni = Some(value),
             "pin" if !value.is_empty() && value != "none" => config.tls.pin_sha256 = Some(value),
             _ => {}
         }
     }
+    config.normalize_cipher();
     let name = url
         .fragment()
         .map(|s| decode(s, source))

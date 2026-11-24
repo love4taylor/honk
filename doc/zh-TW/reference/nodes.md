@@ -67,6 +67,7 @@ Node 模型包含下列欄位。分享連結會從協定方案、userinfo、位�
 | `nowhere_key` | string? | `null` | 來自分享連結使用者資訊的 Nowhere 金鑰。Nowhere 必填，長度為 32 個小寫十六進位字元。 |
 | `nowhere_net` | `NowhereCarrier` | `"tcp"` | `net=tcp` 使用 TLS/TCP，`net=udp` 使用 QUIC/UDP。兩者都可承載 TCP 和 UDP 應用流量。 |
 | `nowhere_morph` | bool | `true` | 為 Nowhere 啟用 Morph。分享連結使用 `morph=0` 或 `morph=1`，必須與 Portal 一致。 |
+| `nowhere_cipher` | `NowhereCipher` | `"chacha"` | 由分享連結的 `cipher` 指定。啟用 Morph 並選擇 AES 時，Honk 儲存 `aes`。 |
 | `hops` | string[] | 省略 | 鏈式節點從入口到出口的各跳節點名稱。其他協定帶有非空清單時，honk 會移除該清單並發出警告。 |
 | `mark` | u32? | `null` | 結構化模型中的出站 `SO_MARK`；不是 dae 分享連結查詢參數。 |
 | `tags` | string[] | `[]` | 分類後設資料；不是 dae 分享連結查詢參數。 |
@@ -325,7 +326,7 @@ Auto、native、XUDP、Mux.Cool 與關閉 UDP 的節點 ID 不變。直接選擇
 | `tuic` | — | 是 | 是 | QUIC 上的 TUIC v5 |
 | `juicity` | — | 是 | 是 | QUIC 上的 Juicity |
 | `anytls` | — | 是 | 是* | 多路複用 TLS session 與 UoT v2 |
-| `nowhere` | — | 是 | 是 | [NW3](#nowherenw3) 經由 TLS/TCP 或 QUIC/UDP，可啟用 Morph |
+| `nowhere` | — | 是 | 是 | [NW3](#nowherenw3) 經由 TLS/TCP 或 QUIC/UDP，可啟用 Morph（`chacha` 或 `aes`） |
 | `direct` | — | 是 | 是 | 保留的內建直連出站；沒有分享連結協定方案 |
 | `block` | — | 否 | 否 | 保留的內建拒絕出站；沒有分享連結協定方案 |
 | `chain` | — | 是 | 需要符合條件的前序跳點與出口 | 依序經過兩至四個節點撥號。見[鏈式節點](#鏈式節點)。 |
@@ -634,7 +635,7 @@ node {
 ```dae
 node {
     nw_tls: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=tcp&morph=1#TLS'
-    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1#QUIC'
+    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&cipher=aes#QUIC-AES'
 }
 ```
 
@@ -643,7 +644,8 @@ node {
 | 金鑰 | 必須是 32 個小寫十六進位字元，以 ASCII 使用，不解碼為十六進位位元組。不可包含額外密碼或路徑。 |
 | 端點 | 必須明確指定非零連接埠；IPv6 主機使用方括號。 |
 | `net` | 預設 `tcp`，每個流使用獨立 TLS 1.3 連線；`udp` 使用可重用 QUIC 連線。兩者均可承載 TCP 和 UDP 應用流量。 |
-| `morph` | 預設 `1`，也可設為 `0`，必須與 Portal 一致。TCP 包含 Nowhere 3.3.0 使用的驗證 Prelude。 |
+| `morph` | 預設 `1`，也可設為 `0`，必須與 Portal 一致。TCP 包含驗證 Prelude。 |
+| `cipher` | `chacha`（預設，ChaCha20-IETF）或 `aes`（AES-128-CTR）。啟用 Morph 時兩端必須一致，AES 要求 Portal 使用 Nowhere 3.4.0 或更新版本。設為 `morph=0` 時，兩個有效值都不影響連線。 參數名稱 `cipher` 使用原文拼寫。 |
 | `sni` | 可選的 ASCII DNS 憑證名稱；省略、空值或 `none` 使用端點主機。 |
 | `pin` | 可選的憑證葉 DER 的 SHA-256 指紋，必須是 64 個小寫十六進位字元。它取代 CA 和主機名驗證；省略、空值或 `none` 保留兩項驗證。 |
 | 重複參數 | 首個已識別參數生效，未知參數忽略。百分號只解碼一次，`+` 保持字面值。 |
@@ -651,7 +653,7 @@ node {
 
 必須使用 TLS 1.3 並協商 `nw3` ALPN，不提供略過驗證或 0-RTT。`net` 選擇載體，與應用流量類型獨立。UDP 流固定目標，接受空封包和最多 65535 位元組的負載，QUIC 會對大封包分片；它們不加入 honk 的共用來源、全錐形關聯。應用負載在驗證和 READY 完成後傳送。Clash、sing-box 結構化訂閱不支援 Nowhere 項目，請使用分享連結。
 
-扁平節點儲存通過 `nowhere_key`、`nowhere_net` 和 `nowhere_morph` 保留這些值，TLS 欄位保留 SNI 和指紋，ALPN 固定為 `["nw3"]`。這些是儲存欄位，不是 dae `node {}` 選項。
+扁平節點儲存保留金鑰、載體和 Morph 開關。啟用 Morph 並選擇 AES 時，也會儲存 `nowhere_cipher: aes`。TLS 欄位保留 SNI 和指紋，ALPN 固定為 `["nw3"]`。dae 的 `node {}` 使用分享連結。
 
 #### Nowhere 執行環境
 
@@ -663,8 +665,10 @@ node {
 | `NOW_FLOW_SETUP_TIMEOUT` | `20s` | 單次建流總預算，包含解析、初始化等待、驗證和 READY；honk 的連線逾時可進一步縮短它。 |
 | `NOW_UDP_IDLE_TIMEOUT` | `120s` | 每個流的閒置上限，僅在完整成功傳送或交付封包後更新；同時用於 QUIC 協商閒置上限，保活間隔為 15 s。 |
 | `NOW_QUIC_UDP_QUEUE_BYTES` | `4194304` | 連線共用的位元組預算涵蓋已排入佇列的 QUIC UDP 資料和未完成重組；未完成重組另受同值的位元組上限限制。Quinn 收發緩衝各固定為 4 MiB；每個流佇列最多 64 個封包，每條連線共用最多 64 個未完成重組，超過 10 s 後到期。 |
-| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | 流接收、連線接收和傳送視窗：`throughput` 為 16/32/32 MiB，`balanced` 為 8/16/16 MiB，`memory` 為 4/8/8 MiB。 |
+| `NOW_TRANSPORT_MEMORY_PROFILE` | `throughput` | 流接收、連線接收和傳送視窗：`throughput` 為 4/32/32 MiB，`balanced` 為 4/16/16 MiB，`memory` 為 4/16/8 MiB。 |
 | `NOW_MORPH_TCP_PRELUDE` / `NOW_MORPH_UDP_PRELUDE` | `fade` | `fade`、`full8` 或 `low7`；只讀取已啟用 Morph 的相應載體設定。 |
+
+QUIC 的連線接收視窗初始為 64 KiB，驗證後提高到設定檔指定的值。4 MiB 的單流視窗可能限制高 RTT 路徑上的單流傳輸速率。
 
 `NOW_TCP_READ_TIMEOUT` 預設為 `30s`：成功關閉寫入方向或讀到上游 EOF 後，TCP 剩餘方向受一次絕對排空期限限制。介接層觀察到上游 EOF 時，honk 可能尚未完成獨立用戶端寫入方向的關閉。`NOW_SHUTDOWN_TIMEOUT` 預設為 `5s`，限制流 ID 耗盡後舊 QUIC 載體的排空時間；TLS UDP 清理使用交握逾時。這些變數不改變 honk 程序結束行為。
 
@@ -940,7 +944,7 @@ XHTTP 以外，未知查詢 key 會被忽略，因此拼錯 key 名不會報錯�
 | `vmess://` | 寬鬆 Base64 v2rayN JSON 或編碼位址形式，見流傳輸一節 |
 | `vless://` | URL userinfo UUID，加流傳輸、TLS/REALITY、flow、Encryption 與上文標準 UDP/mux 查詢參數 |
 | `trojan://` | URL userinfo secret，加傳輸與 TLS 查詢參數 |
-| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `sni`, `pin` |
+| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `cipher=chacha\|aes`, `sni`, `pin` |
 | `anytls://` | URL userinfo secret，加 TLS 與池查詢參數 |
 | `hysteria2://` | 上述 Hysteria2 查詢參數對映；也接受 `hysteria://` |
 | `tuic://` | 上述 TUIC userinfo 與 QUIC 調校 |

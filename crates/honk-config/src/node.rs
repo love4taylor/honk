@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 mod headers;
 mod nowhere;
 pub(crate) use nowhere::valid_domain as valid_nowhere_domain;
-pub use nowhere::{NowhereCarrier, NowhereConfig};
+pub use nowhere::{NowhereCarrier, NowhereCipher, NowhereConfig};
 mod protocol;
 mod validation;
 mod vless;

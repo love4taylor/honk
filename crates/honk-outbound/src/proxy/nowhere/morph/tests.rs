@@ -1,8 +1,65 @@
 use super::*;
 
 #[test]
+fn aes_matches_official_tcp_and_udp_vectors() {
+    let keys = MorphKeys::derive(b"0123456789abcdef0123456789abcdef", NowhereCipher::Aes);
+    let nonce = std::array::from_fn(|index| index as u8);
+    let plain = std::array::from_fn::<_, 37, _>(|index| index as u8);
+    for (key, offset, expected) in [
+        (
+            &keys.tcp_c2s,
+            0,
+            "8e59faa695f33a1a5ffc8369938132d677a1536e730205de8b4767a560fd155b7ed13833e3",
+        ),
+        (
+            &keys.tcp_s2c,
+            0,
+            "17a4869bfb790fa12b676b42a6ad4f40f8eaff0566051e81313ca1a59486b0f766ba989ce2",
+        ),
+        (
+            &keys.tcp_c2s,
+            (1 << 40) + 19,
+            "dda378cb6a89ab5e74c5081119eb5fe3a06c0ee6563feacd15afa86af9b77425f0519188a2",
+        ),
+    ] {
+        let mut stream = cipher::TcpCipher::new(keys.cipher, key, &nonce);
+        stream.try_seek(offset).unwrap();
+        let mut actual = plain;
+        let (first, second) = actual.split_at_mut(21);
+        stream.try_apply_keystream(first).unwrap();
+        stream.try_apply_keystream(second).unwrap();
+        assert_eq!(hex(&actual), expected);
+    }
+
+    for (key, expected) in [
+        (
+            &keys.udp_c2s,
+            "4378463322b3680c1d1ad62068c536c0fc5e1eac063187dcb2cf48d0ab609405aa9f4fea6b",
+        ),
+        (
+            &keys.udp_s2c,
+            "2813cf0312ebdcc2beb4ff955b4667eb3ab282761d5d5ecc3b1b111d8531262cb6ea62744a",
+        ),
+    ] {
+        let mut actual = [0; 37];
+        cipher::apply_datagram(keys.cipher, key, &nonce, &plain, &mut actual).unwrap();
+        assert_eq!(hex(&actual), expected);
+    }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(hex, "{byte:02x}").unwrap();
+    }
+    hex
+}
+
+#[test]
 fn authenticated_prelude_binds_identity_counter_nonce_and_shape() {
-    let keys = MorphKeys::derive(b"0123456789abcdef0123456789abcdef");
+    let keys = MorphKeys::derive(b"0123456789abcdef0123456789abcdef", NowhereCipher::ChaCha);
     let client = ClientPrelude::default();
     let first = client.allocate().unwrap();
     let second = client.allocate().unwrap();
@@ -20,15 +77,21 @@ fn authenticated_prelude_binds_identity_counter_nonce_and_shape() {
         assert!(keys.decode_prelude(&changed, &nonce).is_none());
     }
     assert!(keys.decode_prelude(&prelude, &[0x13; NONCE_LEN]).is_none());
-    let wrong = MorphKeys::derive(b"1123456789abcdef0123456789abcdef");
+    let wrong = MorphKeys::derive(b"1123456789abcdef0123456789abcdef", NowhereCipher::ChaCha);
     assert!(wrong.decode_prelude(&prelude, &nonce).is_none());
 }
 
 #[tokio::test]
 async fn udp_socket_transform_interoperates_and_preserves_datagram_boundaries() {
+    for cipher in [NowhereCipher::ChaCha, NowhereCipher::Aes] {
+        udp_socket_round_trip(cipher).await;
+    }
+}
+
+async fn udp_socket_round_trip(cipher: NowhereCipher) {
     use quinn::udp::Transmit;
     use std::{net::UdpSocket, sync::Arc};
-    let keys = MorphKeys::derive(b"0123456789abcdef0123456789abcdef");
+    let keys = MorphKeys::derive(b"0123456789abcdef0123456789abcdef", cipher);
     let runtime = quinn::default_runtime().unwrap();
     let raw = UdpSocket::bind("127.0.0.1:0").unwrap();
     let peer = UdpSocket::bind("127.0.0.1:0").unwrap();

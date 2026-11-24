@@ -495,6 +495,9 @@ impl OutboundConfig {
                 config.morph,
                 config.tls.pin_sha256.as_deref().unwrap_or("")
             ));
+            if config.morph && config.cipher == super::NowhereCipher::Aes {
+                fingerprint.push_str(":aes");
+            }
         }
         if let Self::Vless(config) = self {
             fingerprint.push('|');
