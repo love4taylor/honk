@@ -869,7 +869,9 @@ quinn 的 1.25 MiB 視窗會讓 stream 在 100 ms RTT 下大約受限於 12.5 MB
 
 `NowhereHandler` 註冊 TCP、封包、預熱和探測能力。節點執行階段持有用戶端與其 TLS 策略。`net=tcp` 為每條流撥接一個帶 mark 的 TCP socket，建立 TLS stream 後使用 TLS exporter 驗證。`net=udp` 在帶 mark 的 UDP socket 上重複使用 Quinn 連線，第一條流使用 TLS exporter 驗證連線。只有 QUIC 載體支援預熱。啟用 Morph 時，TCP Prelude 和遮罩位於 TLS 下層，UDP 遮罩位於 QUIC 下層。
 
-兩種載體預設使用 ChaCha20-IETF，也可透過 `cipher=aes` 選擇 AES-128-CTR。啟用 Morph 時，用戶端和 Portal 必須使用相同演算法。驗證與完整性檢查仍由 TLS 和 QUIC 提供。
+預設的 Full Morph 遮罩涵蓋整個 TLS 位元組串流或 QUIC 資料報。Core Morph 遮罩涵蓋每個 TLS 記錄標頭，符合條件的 TLS 1.3 密文記錄酬載直接傳遞。若 QUIC 資料報的首位元組最高位元為 1，或長度在 41 位元組以內，遮罩涵蓋整個資料報，其餘情形只遮罩開頭 25 和結尾 16 位元組。
+
+兩種等級預設使用 ChaCha20-IETF，也可透過 `cipher=aes` 選擇 AES-128-CTR。啟用 Morph 時，用戶端和 Portal 的等級與演算法都必須一致。驗證與完整性檢查由 TLS 和 QUIC 提供。
 
 兩種載體都要求 TLS 1.3 和 ALPN `nw3`。rustls 策略使用 Linux 系統根憑證並驗證伺服器身分。設定葉憑證 pin 後，pin 取代憑證鏈與名稱驗證，TLS 交握簽章仍須驗證。工作階段依用戶端恢復，並停用 early data。
 

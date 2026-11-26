@@ -4,3 +4,4 @@ Added
 - Support Nowhere client environment settings for handshake/setup/idle deadlines, QUIC memory and UDP budgets, and Morph Prelude policies.
 - Match official 3.3.0 client authentication, TLS policy, UDP framing, reassembly, timeouts and connection lifecycle within honk's relay and runtime interfaces.
 - Support Nowhere 3.4.0 AES-128-CTR Morph on TLS and QUIC with `cipher=aes`, and follow the updated QUIC transport window profiles.
+- Support Nowhere 3.5.0 Core Morph on TLS and QUIC with `grade=core`. Full Morph remains the default.

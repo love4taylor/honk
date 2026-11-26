@@ -8,7 +8,7 @@ use std::task::{Context, Poll};
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
-use honk_config::node::NowhereCipher;
+use honk_config::node::{NowhereCipher, NowhereGrade};
 use quinn::udp::{RecvMeta, Transmit};
 use quinn::{AsyncUdpSocket, UdpPoller};
 
@@ -62,6 +62,7 @@ pub(crate) fn wrap_morph_udp_socket(
             Ok(Arc::new(MorphUdpSocket {
                 inner,
                 cipher: keys.cipher,
+                grade: keys.grade,
                 tx_key,
                 rx_key,
                 send: Mutex::new(UdpSendState::new(role, policy)?),
@@ -172,6 +173,7 @@ pub(crate) fn configure_morph_mtu(transport: &mut quinn::TransportConfig, enable
 pub(super) struct MorphUdpSocket {
     pub(super) inner: Arc<dyn AsyncUdpSocket>,
     pub(super) cipher: NowhereCipher,
+    pub(super) grade: NowhereGrade,
     pub(super) tx_key: MorphKeyBytes,
     pub(super) rx_key: MorphKeyBytes,
 
@@ -236,7 +238,15 @@ impl AsyncUdpSocket for MorphUdpSocket {
             let (nonce, payload) = send[wire_offset..wire_end].split_at_mut(NONCE_LEN);
             let nonce: &mut [u8; NONCE_LEN] = nonce.try_into().expect("fixed nonce prefix");
             nonce_generator.generate(nonce)?;
-            apply_datagram(self.cipher, &self.tx_key, nonce, plain, payload)?;
+            apply_datagram(
+                self.cipher,
+                self.grade,
+                false,
+                &self.tx_key,
+                nonce,
+                plain,
+                payload,
+            )?;
             wire_offset = wire_end;
         }
         debug_assert_eq!(wire_offset, wire_len);
@@ -337,6 +347,8 @@ impl AsyncUdpSocket for MorphUdpSocket {
                 let end = decoded_len + encrypted.len();
                 apply_datagram(
                     self.cipher,
+                    self.grade,
+                    true,
                     &self.rx_key,
                     nonce,
                     encrypted,

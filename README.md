@@ -99,7 +99,7 @@ SPDX-License-Identifier: GPL-3.0-only
 Copyright (c) 2025, glassyiris <honk@catmint.cc> and honk contributors
 ```
 
-The Nowhere Morph client implementation under `crates/honk-outbound/src/proxy/nowhere/morph/` is adapted from [NodePassProject/Nowhere 3.3.0](https://github.com/NodePassProject/Nowhere/tree/000007b2482b8acf3a609888921fd847cad56c33/src/transport/morph), Copyright (C) 2026 NodePassProject, GPL-3.0-only. This adaptation keeps the client wire format and integrates honk configuration and runtime ownership. The AES-128-CTR extension follows [Nowhere 3.4.0](https://github.com/NodePassProject/Nowhere/tree/000001c866b0c9fada350c84bdc11702473564a6/src/transport/morph).
+The Nowhere Morph client implementation under `crates/honk-outbound/src/proxy/nowhere/morph/` is adapted from [NodePassProject/Nowhere 3.3.0](https://github.com/NodePassProject/Nowhere/tree/000007b2482b8acf3a609888921fd847cad56c33/src/transport/morph), Copyright (C) 2026 NodePassProject, GPL-3.0-only. This adaptation keeps the client wire format and integrates honk configuration and runtime ownership. The AES-128-CTR extension follows [Nowhere 3.4.0](https://github.com/NodePassProject/Nowhere/tree/000001c866b0c9fada350c84bdc11702473564a6/src/transport/morph). Core Morph follows [Nowhere 3.5.0](https://github.com/NodePassProject/Nowhere/tree/000008d143d44688e9ed92363bd7fb1061f2cf06/src/transport/morph).
 
 The development-only [dae parser oracle](tools/dae-parse/README.md) links dae (AGPL-3.0-only). It is never shipped or linked into `honk-core`.
 

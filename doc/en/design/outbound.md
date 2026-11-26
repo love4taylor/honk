@@ -1086,7 +1086,9 @@ UDP socket. The first flow authenticates the connection using the TLS exporter.
 Only the QUIC carrier supports warm-up. With Morph enabled, the TCP prelude
 and masking sit below TLS, and UDP masking sits below QUIC.
 
-Both carriers support ChaCha20-IETF by default and AES-128-CTR with `cipher=aes`. With Morph enabled, the client and Portal must agree on the cipher. TLS and QUIC still provide authentication and integrity.
+Full Morph is the default and masks the entire TLS stream or QUIC datagram. Core Morph masks each TLS record header and leaves the payload of eligible TLS 1.3 ciphertext records intact. In QUIC it masks the full datagram when the first byte has its high bit set or the length is at most 41 bytes. Other datagrams have only their first 25 and last 16 bytes masked.
+
+Both grades support ChaCha20-IETF by default and AES-128-CTR with `cipher=aes`. With Morph enabled, the client and Portal must agree on both grade and cipher. TLS and QUIC provide authentication and integrity.
 
 Both carriers require TLS 1.3 and ALPN `nw3`. The rustls policy uses native
 Linux roots and verifies the server identity unless a leaf certificate pin is

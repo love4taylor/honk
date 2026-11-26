@@ -10,7 +10,7 @@ mod udp_socket;
 use std::{fmt, io};
 
 use hmac::{Hmac, KeyInit as HmacKeyInit, Mac};
-use honk_config::node::NowhereCipher;
+use honk_config::node::{NowhereCipher, NowhereGrade};
 use sha2::Sha256;
 
 pub(crate) use policy::PreludePolicy;
@@ -34,6 +34,7 @@ type MorphKeyBytes = [u8; 32];
 #[derive(Clone)]
 pub(crate) struct MorphKeys {
     cipher: NowhereCipher,
+    grade: NowhereGrade,
     tcp_c2s: MorphKeyBytes,
     tcp_s2c: MorphKeyBytes,
     udp_c2s: MorphKeyBytes,
@@ -49,10 +50,11 @@ impl fmt::Debug for MorphKeys {
 }
 
 impl MorphKeys {
-    pub(crate) fn derive(shared_key: &[u8], cipher: NowhereCipher) -> Self {
+    pub(crate) fn derive(shared_key: &[u8], cipher: NowhereCipher, grade: NowhereGrade) -> Self {
         let root = hmac_sha256(MORPH_ROOT_SALT, shared_key);
         Self {
             cipher,
+            grade,
             tcp_c2s: hkdf_expand_one(root, TCP_C2S_INFO),
             tcp_s2c: hkdf_expand_one(root, TCP_S2C_INFO),
             udp_c2s: hkdf_expand_one(root, UDP_C2S_INFO),

@@ -27,12 +27,21 @@ pub enum NowhereCipher {
     Aes,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NowhereGrade {
+    #[default]
+    Full,
+    Core,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct NowhereConfig {
     pub key: String,
     pub carrier: NowhereCarrier,
     pub morph: bool,
     pub cipher: NowhereCipher,
+    pub grade: NowhereGrade,
     pub tls: TlsOptions,
 }
 
@@ -43,6 +52,7 @@ impl Default for NowhereConfig {
             carrier: NowhereCarrier::Tcp,
             morph: true,
             cipher: NowhereCipher::default(),
+            grade: NowhereGrade::default(),
             tls: TlsOptions {
                 enabled: true,
                 alpn: vec!["nw3".into()],
@@ -53,9 +63,10 @@ impl Default for NowhereConfig {
 }
 
 impl NowhereConfig {
-    pub(crate) fn normalize_cipher(&mut self) {
+    pub(crate) fn normalize_morph(&mut self) {
         if !self.morph {
             self.cipher = NowhereCipher::default();
+            self.grade = NowhereGrade::default();
         }
     }
 

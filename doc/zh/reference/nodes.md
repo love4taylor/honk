@@ -67,6 +67,7 @@ Node 模型包含下列字段。分享链接会从协议方案、userinfo、地�
 | `nowhere_key` | string? | `null` | 来自分享链接用户信息部分的 Nowhere 密钥。Nowhere 必填，长度为 32 个小写十六进制字符。 |
 | `nowhere_net` | `NowhereCarrier` | `"tcp"` | `net=tcp` 使用 TLS/TCP，`net=udp` 使用 QUIC/UDP。两者均可承载 TCP 和 UDP 应用流量。 |
 | `nowhere_morph` | bool | `true` | 为 Nowhere 启用 Morph。分享链接使用 `morph=0` 或 `morph=1`，必须与 Portal 一致。 |
+| `nowhere_grade` | `NowhereGrade` | `"full"` | 由分享链接的 `grade` 指定。启用 Morph 并选择 Core 时，honk 存储 `core`。 |
 | `nowhere_cipher` | `NowhereCipher` | `"chacha"` | 由分享链接的 `cipher` 指定。启用 Morph 并选择 AES 时，Honk 存储 `aes`。 |
 | `hops` | string[] | 省略 | 链式节点从入口到出口的各跳节点名。其他协议携带非空列表时，honk 会移除该列表并发出警告。 |
 | `mark` | u32? | `null` | 结构化模型中的出站 `SO_MARK`；不是 dae 分享链接查询参数。 |
@@ -278,7 +279,7 @@ protocol|host|port|credential-fingerprint|dial-shape
 - Hysteria2 混淆、REALITY 参数和 `flow`；
 - 有效的 VLESS TLS 安全配置、UDP 权限、回退编码和多路复用路径。
 
-Nowhere 将密钥纳入凭据指纹，并将载体、Morph 开关和证书 pin 纳入拨号形状。
+Nowhere 将密钥纳入凭据指纹，并将载体、Morph 开关和证书 pin 纳入拨号形状。启用 Morph 时，选择 Core 或 AES 都会影响节点 ID。
 
 明文 VLESS 与 TLS 使用不同身份。REALITY key 选择认证传输，不受冗余 TLS 标志影响。
 
@@ -326,7 +327,7 @@ Auto、native、XUDP、Mux.Cool 与关闭 UDP 的节点 ID 不变。直接选择
 | `tuic` | — | 是 | 是 | QUIC 上的 TUIC v5 |
 | `juicity` | — | 是 | 是 | QUIC 上的 Juicity |
 | `anytls` | — | 是 | 是* | 多路复用 TLS session 与 UoT v2 |
-| `nowhere` | — | 是 | 是 | [NW3](#nowherenw3) 走 TLS/TCP 或 QUIC/UDP，可启用 Morph（`chacha` 或 `aes`） |
+| `nowhere` | — | 是 | 是 | [NW3](#nowherenw3) 走 TLS/TCP 或 QUIC/UDP，可启用 Full 或 Core Morph（`chacha` 或 `aes`） |
 | `direct` | — | 是 | 是 | 保留的内置直连出站；没有分享链接协议方案 |
 | `block` | — | 否 | 否 | 保留的内置拒绝出站；没有分享链接协议方案 |
 | `chain` | — | 是 | 需要合格的前序跳和出口 | 按顺序经过两个至四个节点拨号。见[链式节点](#链式节点)。 |
@@ -635,7 +636,7 @@ node {
 ```dae
 node {
     nw_tls: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=tcp&morph=1#TLS'
-    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&cipher=aes#QUIC-AES'
+    nw_quic: 'nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&grade=core&cipher=aes#QUIC-Core-AES'
 }
 ```
 
@@ -645,6 +646,7 @@ node {
 | 端点 | 必须显式指定非零端口；IPv6 主机使用方括号。 |
 | `net` | 默认 `tcp`，每个流使用独立 TLS 1.3 连接；`udp` 使用可复用 QUIC 连接。两者均可承载 TCP 和 UDP 应用流量。 |
 | `morph` | 默认 `1`，也可设为 `0`，必须与 Portal 一致。TCP 包含认证 Prelude。 |
+| `grade` | 默认 `full`，也可设为 `core`，后者要求 Portal 使用 Nowhere 3.5.0 或更高版本。启用 Morph 时两端必须使用相同档位。设为 `morph=0` 时，两个有效值都不影响连接。参数名 `grade` 使用原文拼写。 |
 | `cipher` | `chacha`（默认，ChaCha20-IETF）或 `aes`（AES-128-CTR）。启用 Morph 时两端必须一致，AES 要求 Portal 使用 Nowhere 3.4.0 或更高版本。设为 `morph=0` 时，两个有效值都不影响连接。 参数名 `cipher` 使用原文拼写。 |
 | `sni` | 可选的 ASCII DNS 证书名称；省略、空值或 `none` 使用端点主机。 |
 | `pin` | 可选的证书叶子 DER 的 SHA-256 指纹，必须是 64 个小写十六进制字符。它取代 CA 和主机名验证；省略、空值或 `none` 保留两项验证。 |
@@ -653,7 +655,7 @@ node {
 
 必须使用 TLS 1.3 并协商 `nw3` ALPN，不提供跳过验证或 0-RTT。`net` 选择载体，与应用流量类型独立。UDP 流固定目标，接受空包和最多 65535 字节的负载，QUIC 会对大包分片；它们不加入 honk 的共享来源、全锥形关联。应用负载在认证和 READY 完成后发送。Clash、sing-box 结构化订阅不支持 Nowhere 条目，请使用分享链接。
 
-扁平节点存储保留密钥、载体和 Morph 开关。启用 Morph 并选择 AES 时，还会存储 `nowhere_cipher: aes`。TLS 字段保留 SNI 和指纹，ALPN 固定为 `["nw3"]`。dae 的 `node {}` 使用分享链接。
+扁平节点存储保留密钥、载体和 Morph 开关。启用 Morph 时，选择 Core 会额外存储 `nowhere_grade: core`，选择 AES 会额外存储 `nowhere_cipher: aes`。TLS 字段保留 SNI 和指纹，ALPN 固定为 `["nw3"]`。dae 的 `node {}` 使用分享链接。
 
 #### Nowhere 运行环境
 
@@ -944,7 +946,7 @@ XHTTP 以外，未知查询 key 会被忽略，因此拼错 key 名不会报错�
 | `vmess://` | 宽松 Base64 v2rayN JSON 或编码地址形式，见流传输一节 |
 | `vless://` | URL userinfo UUID，加流传输、TLS/REALITY、flow、Encryption 与上文规范 UDP/mux 查询参数 |
 | `trojan://` | URL userinfo secret，加传输与 TLS 查询参数 |
-| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `cipher=chacha\|aes`, `sni`, `pin` |
+| `nowhere://` | NW3 Share links: `net=tcp\|udp`, `morph=0\|1`, `grade=full\|core`, `cipher=chacha\|aes`, `sni`, `pin` |
 | `anytls://` | URL userinfo secret，加 TLS 与池查询参数 |
 | `hysteria2://` | 上述 Hysteria2 查询参数映射；也接受 `hysteria://` |
 | `tuic://` | 上述 TUIC userinfo 与 QUIC 调优 |

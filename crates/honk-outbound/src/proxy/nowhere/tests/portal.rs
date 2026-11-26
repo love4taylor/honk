@@ -14,13 +14,13 @@ pub(in crate::proxy::nowhere) async fn start(
     bin: &str,
     morph: bool,
 ) -> (Portal, tempfile::TempDir, u16, String) {
-    start_with_cipher(bin, morph, "").await
+    start_with_morph_options(bin, morph, "").await
 }
 
-async fn start_with_cipher(
+async fn start_with_morph_options(
     bin: &str,
     morph: bool,
-    cipher_query: &str,
+    morph_query: &str,
 ) -> (Portal, tempfile::TempDir, u16, String) {
     use sha2::{Digest, Sha256};
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -41,7 +41,7 @@ async fn start_with_cipher(
     drop((tcp, udp));
     let child = Command::new(bin)
         .arg(format!(
-            "portal://{KEY}@127.0.0.1:{port}?morph={}&tls=2&crt={}&key={}{cipher_query}",
+            "portal://{KEY}@127.0.0.1:{port}?morph={}&tls=2&crt={}&key={}{morph_query}",
             u8::from(morph),
             crt.display(),
             key.display()
@@ -86,18 +86,24 @@ async fn official_portal_aes_tls_quic_morph_tcp_udp_matrix() {
     portal_matrix(&[(true, "&cipher=aes")]).await;
 }
 
+#[tokio::test]
+#[ignore = "requires Nowhere 3.5.0 or newer executable in HONK_NOWHERE_BIN"]
+async fn official_portal_core_tls_quic_morph_tcp_udp_matrix() {
+    portal_matrix(&[(true, "&grade=core"), (true, "&grade=core&cipher=aes")]).await;
+}
+
 async fn portal_matrix(modes: &[(bool, &str)]) {
     const UDP_READY_PROBE: &[u8] = b"quic route ready";
     let binary = std::env::var("HONK_NOWHERE_BIN").expect("HONK_NOWHERE_BIN is required");
-    for &(morph, cipher_query) in modes {
+    for &(morph, morph_query) in modes {
         let (_portal, _directory, port, pin) =
-            start_with_cipher(&binary, morph, cipher_query).await;
+            start_with_morph_options(&binary, morph, morph_query).await;
         for carrier in ["tcp", "udp"] {
             let link = format!(
                 "nowhere://{KEY}@127.0.0.1:{port}?net={carrier}&morph={}&sni=localhost&pin={pin}",
                 u8::from(morph)
             );
-            let node = Node::from_share_link(&format!("{link}{cipher_query}")).unwrap();
+            let node = Node::from_share_link(&format!("{link}{morph_query}")).unwrap();
             let generation = Arc::new(
                 crate::runtime::OutboundRuntimeRegistry::build(std::slice::from_ref(&node))
                     .unwrap(),
@@ -105,12 +111,20 @@ async fn portal_matrix(modes: &[(bool, &str)]) {
             let registry = crate::proxy::ProxyRegistry::default_resolver().unwrap();
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let target = listener.local_addr().unwrap();
-            if !cipher_query.is_empty() {
-                let wrong_cipher = Node::from_share_link(&link).unwrap();
+            let mismatch = match (carrier, morph_query) {
+                (_, "&cipher=aes") => Some(""),
+                ("tcp", query) => query.strip_prefix("&grade=core"),
+                _ => None,
+            };
+            if let Some(mismatch) = mismatch {
+                let wrong = Node::from_share_link(&format!("{link}{mismatch}")).unwrap();
                 let result = NowhereHandler
-                    .dial(&wrong_cipher, target, None, Duration::from_secs(1))
+                    .dial(&wrong, target, None, Duration::from_secs(1))
                     .await;
-                assert!(result.is_err(), "accepted mismatched cipher net={carrier}");
+                assert!(
+                    result.is_err(),
+                    "accepted mismatched Morph options net={carrier}: {morph_query} vs {mismatch}"
+                );
             }
             let echo = tokio::spawn(async move {
                 let (mut stream, _) = listener.accept().await.unwrap();
@@ -208,7 +222,7 @@ async fn portal_matrix(modes: &[(bool, &str)]) {
             echo.await.unwrap();
             generation.shutdown().await;
             eprintln!(
-                "official Portal passed: net={carrier} morph={morph}{cipher_query}, TCP half-close and UDP 0/1/1200/5000/60000 bytes"
+                "official Portal passed: net={carrier} morph={morph}{morph_query}, TCP half-close and UDP 0/1/1200/5000/60000 bytes"
             );
         }
     }

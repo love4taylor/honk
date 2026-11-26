@@ -802,8 +802,8 @@ async fn c19_invalid_http_encoding_preserves_saved_body() {
 }
 
 #[test]
-fn nowhere_share_link_subscriptions_preserve_carrier_morph_and_cipher() {
-    let body = "nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&cipher=aes#NW3";
+fn nowhere_share_link_subscriptions_preserve_carrier_morph_grade_and_cipher() {
+    let body = "nowhere://0123456789abcdef0123456789abcdef@relay.example:2000?net=udp&morph=1&grade=core&cipher=aes#NW3";
     let subscription = Subscription {
         sub_type: SubscriptionType::Simple,
         ..Default::default()
@@ -822,6 +822,10 @@ fn nowhere_share_link_subscriptions_preserve_carrier_morph_and_cipher() {
             honk_config::node::NowhereCarrier::Udp
         );
         assert!(node.nowhere().unwrap().morph);
+        assert_eq!(
+            node.nowhere().unwrap().grade,
+            honk_config::node::NowhereGrade::Core
+        );
         assert_eq!(
             node.nowhere().unwrap().cipher,
             honk_config::node::NowhereCipher::Aes

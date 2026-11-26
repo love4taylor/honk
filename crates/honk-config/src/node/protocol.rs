@@ -498,6 +498,9 @@ impl OutboundConfig {
             if config.morph && config.cipher == super::NowhereCipher::Aes {
                 fingerprint.push_str(":aes");
             }
+            if config.morph && config.grade == super::NowhereGrade::Core {
+                fingerprint.push_str(":core");
+            }
         }
         if let Self::Vless(config) = self {
             fingerprint.push('|');

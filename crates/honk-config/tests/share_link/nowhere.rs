@@ -1,4 +1,4 @@
-use honk_config::node::{Node, NowhereCarrier, NowhereCipher};
+use honk_config::node::{Node, NowhereCarrier, NowhereCipher, NowhereGrade};
 
 const KEY: &str = "0123456789abcdef0123456789abcdef";
 
@@ -120,9 +120,52 @@ fn nowhere_cipher_controls_identity_only_with_morph_enabled() {
 }
 
 #[test]
+fn nowhere_grade_controls_identity_only_with_morph_enabled() {
+    let default = parse("");
+    assert_eq!(default.nowhere().unwrap().grade, NowhereGrade::Full);
+    assert_eq!(parse("?grade=full").id, default.id);
+    assert_eq!(parse("?%67rade=core").id, default.id);
+    assert!(
+        serde_json::to_value(&default)
+            .unwrap()
+            .get("nowhere_grade")
+            .is_none()
+    );
+
+    let core = parse("?%67rade=full&grade=%63ore&grade=%ZZ");
+    assert_eq!(core.nowhere().unwrap().grade, NowhereGrade::Core);
+    assert_ne!(core.id, default.id);
+    assert_eq!(core.id, parse("?grade=core").id);
+    let aes = parse("?cipher=aes");
+    assert_eq!(aes.id, parse("?cipher=aes&grade=full").id);
+    assert_ne!(aes.id, parse("?cipher=aes&grade=core").id);
+    assert_ne!(core.id, parse("?cipher=aes&grade=core").id);
+
+    let off = parse("?morph=0");
+    let off_core = parse("?grade=core&morph=0");
+    assert_eq!(off_core.id, off.id);
+    assert_eq!(off_core.outbound, off.outbound);
+    let mut flat = serde_json::to_value(&off).unwrap();
+    flat["nowhere_grade"] = serde_json::json!("core");
+    assert_eq!(
+        serde_json::from_value::<Node>(flat).unwrap().outbound,
+        off.outbound
+    );
+    for query in [
+        "grade=",
+        "grade=Core",
+        "grade=bad&grade=core",
+        "morph=0&grade=bad",
+    ] {
+        let link = format!("nowhere://{KEY}@relay.example:2000?{query}");
+        assert!(Node::from_share_link(&link).is_err(), "accepted {query}");
+    }
+}
+
+#[test]
 fn nowhere_round_trips_all_flat_storage_formats() {
     let node = parse(&format!(
-        "?net=udp&morph=1&cipher=aes&sni=cert.example&pin={}#Test",
+        "?net=udp&morph=1&grade=core&cipher=aes&sni=cert.example&pin={}#Test",
         "a".repeat(64)
     ));
     let json = serde_json::to_string(&node).unwrap();
@@ -141,6 +184,7 @@ fn nowhere_round_trips_all_flat_storage_formats() {
         ("tls_alpn", serde_json::json!(["h2"])),
         ("nowhere_key", serde_json::json!("bad")),
         ("nowhere_cipher", serde_json::json!("bad")),
+        ("nowhere_grade", serde_json::json!("bad")),
     ] {
         let mut json = serde_json::to_value(&node).unwrap();
         json[field] = value;
@@ -151,7 +195,7 @@ fn nowhere_round_trips_all_flat_storage_formats() {
 #[test]
 fn nowhere_dae_declaration_uses_share_links_and_explicit_tags() {
     let source = format!(
-        "node {{\n    edge: 'nowhere://{KEY}@relay.example:2000?net=udp&cipher=aes#fragment'\n}}\nrouting {{ fallback: direct }}"
+        "node {{\n    edge: 'nowhere://{KEY}@relay.example:2000?net=udp&grade=core&cipher=aes#fragment'\n}}\nrouting {{ fallback: direct }}"
     );
     let mut diagnostics = Vec::new();
     let config =
@@ -168,4 +212,5 @@ fn nowhere_dae_declaration_uses_share_links_and_explicit_tags() {
         config.nodes[0].nowhere().unwrap().cipher,
         NowhereCipher::Aes
     );
+    assert_eq!(config.nodes[0].nowhere().unwrap().grade, NowhereGrade::Core);
 }

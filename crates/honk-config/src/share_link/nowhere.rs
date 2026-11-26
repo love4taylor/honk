@@ -1,6 +1,8 @@
 use crate::diagnostic::SourceRef;
 use crate::error::DetailedConfigError;
-use crate::node::{Node, NowhereCarrier, NowhereCipher, NowhereConfig, OutboundConfig};
+use crate::node::{
+    Node, NowhereCarrier, NowhereCipher, NowhereConfig, NowhereGrade, OutboundConfig,
+};
 
 fn decode(value: &str, source: &SourceRef) -> Result<String, DetailedConfigError> {
     let bytes = value.as_bytes();
@@ -64,12 +66,14 @@ pub(super) fn parse(
         let Ok(name) = decode(raw_name, source) else {
             continue;
         };
-        // Nowhere 3.4 matches the new cipher key literally. Keep older aliases.
-        if name == "cipher" && raw_name != "cipher" {
+        // Match the upstream spelling of the newer options while keeping older aliases.
+        if matches!(name.as_str(), "cipher" | "grade") && raw_name != name {
             continue;
         }
-        if !matches!(name.as_str(), "net" | "morph" | "cipher" | "sni" | "pin")
-            || !seen.insert(name.clone())
+        if !matches!(
+            name.as_str(),
+            "net" | "morph" | "cipher" | "grade" | "sni" | "pin"
+        ) || !seen.insert(name.clone())
         {
             continue;
         }
@@ -96,12 +100,19 @@ pub(super) fn parse(
                     _ => return Err(invalid()),
                 };
             }
+            "grade" => {
+                config.grade = match value.as_str() {
+                    "full" => NowhereGrade::Full,
+                    "core" => NowhereGrade::Core,
+                    _ => return Err(invalid()),
+                };
+            }
             "sni" if !value.is_empty() && value != "none" => config.tls.sni = Some(value),
             "pin" if !value.is_empty() && value != "none" => config.tls.pin_sha256 = Some(value),
             _ => {}
         }
     }
-    config.normalize_cipher();
+    config.normalize_morph();
     let name = url
         .fragment()
         .map(|s| decode(s, source))

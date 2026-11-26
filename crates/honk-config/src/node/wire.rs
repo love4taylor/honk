@@ -183,6 +183,8 @@ struct FlatNode {
     #[serde(default)]
     nowhere_cipher: super::NowhereCipher,
     #[serde(default)]
+    nowhere_grade: super::NowhereGrade,
+    #[serde(default)]
     anytls_min_idle_session: Option<usize>,
     #[serde(default)]
     anytls_idle_session_check_interval: Option<u64>,
@@ -708,9 +710,10 @@ impl FlatNode {
                     carrier: flat.nowhere_net,
                     morph: flat.nowhere_morph,
                     cipher: flat.nowhere_cipher,
+                    grade: flat.nowhere_grade,
                     tls,
                 };
-                config.normalize_cipher();
+                config.normalize_morph();
                 OutboundConfig::Nowhere(config)
             }
             NodeProtocol::Direct => OutboundConfig::Direct,
@@ -821,6 +824,8 @@ struct WireOptions<'a> {
     nowhere_morph: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     nowhere_cipher: Option<super::NowhereCipher>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nowhere_grade: Option<super::NowhereGrade>,
     anytls_min_idle_session: Option<usize>,
     anytls_idle_session_check_interval: Option<u64>,
     anytls_idle_session_timeout: Option<u64>,
@@ -964,6 +969,9 @@ impl<'a> WireOptions<'a> {
                 wire.nowhere_morph = Some(config.morph);
                 if config.morph && config.cipher != super::NowhereCipher::default() {
                     wire.nowhere_cipher = Some(config.cipher);
+                }
+                if config.morph && config.grade != super::NowhereGrade::default() {
+                    wire.nowhere_grade = Some(config.grade);
                 }
             }
             OutboundConfig::Chain(config) => wire.hops = Some(&config.hops),
